@@ -8,6 +8,8 @@ import {
   NPTransaction,
   NPPaymentError,
   NPNetworkError,
+  BalanceInfo,
+  TransactionQuery,
 } from '../types/index.js';
 import { FacilitatorClient } from '../facilitator/index.js';
 
@@ -16,21 +18,6 @@ export interface AgentManagerOptions {
   facilitator: FacilitatorClient;
 }
 
-export interface TransactionQuery {
-  limit?: number;
-  offset?: number;
-  fromDate?: Date;
-  toDate?: Date;
-  status?: 'completed' | 'pending' | 'failed';
-  direction?: 'sent' | 'received' | 'all';
-}
-
-export interface BalanceInfo {
-  balance: number;
-  currency: 'NP';
-  walletId: string;
-  lastUpdated: string;
-}
 
 export class AgentManager {
   private readonly agentName: string;
@@ -100,7 +87,7 @@ export class AgentManager {
       const response = await this.makeAgentRequest(`/transaction/${txId}`);
       return response.transaction || null;
     } catch (error) {
-      if (error instanceof NPNetworkError && error.details?.status === 404) {
+      if (error instanceof NPNetworkError && (error.details as any)?.status === 404) {
         return null;
       }
       throw new NPPaymentError(
@@ -213,7 +200,7 @@ export class AgentManager {
         .reduce((sum, tx) => sum + tx.amountMinor, 0);
 
       const lastActivity = recentTransactions.length > 0
-        ? recentTransactions[0].timestamp
+        ? recentTransactions[0]?.timestamp ?? null
         : null;
 
       return {
@@ -247,7 +234,7 @@ export class AgentManager {
       // For now, we'll simulate the structure
       const url = `${(this.facilitator as any).baseUrl}/agents/${this.agentName}${endpoint}`;
 
-      const response = await fetch(url, {
+      const response = await (globalThis as any).fetch(url, {
         method: options.method || 'GET',
         headers: {
           'Content-Type': 'application/json',
