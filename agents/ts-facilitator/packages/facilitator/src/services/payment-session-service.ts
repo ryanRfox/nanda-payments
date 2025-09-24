@@ -91,6 +91,11 @@ export class PaymentSessionService {
       }
 
       // Create payment session
+      const now = new Date();
+      const expiresAt = new Date(
+        now.getTime() + this.config.security.sessionExpirationMinutes * 60 * 1000
+      );
+
       const session = await this.createSession({
         resourceServer: mockToAgent,
         resource: mockResource,
@@ -101,6 +106,7 @@ export class PaymentSessionService {
         status: 'verified',
         paymentRequirements,
         paymentPayload,
+        expiresAt: expiresAt.toISOString(),
       });
 
       return {

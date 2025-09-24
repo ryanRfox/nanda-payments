@@ -12,6 +12,3 @@ export * from './routes/index.js';
 
 // Export configuration utilities
 export { loadConfig, type Config } from './models/config.js';
-
-// Export main server (for programmatic usage)
-export { default } from './server.js';
