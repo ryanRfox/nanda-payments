@@ -1,0 +1,54 @@
+{
+  "name": "@nanda/facilitator",
+  "version": "1.0.0",
+  "description": "NANDA Facilitator - x402 payment verification and settlement service",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx --watch src/server.ts",
+    "start": "node dist/server.js",
+    "test": "vitest",
+    "test:coverage": "vitest --coverage",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src/**/*.ts",
+    "format": "prettier --write src/**/*.ts"
+  },
+  "keywords": [
+    "x402",
+    "payment",
+    "facilitator",
+    "nanda",
+    "typescript",
+    "mongodb",
+    "hono"
+  ],
+  "author": "NANDA",
+  "license": "MIT",
+  "dependencies": {
+    "hono": "^4.6.3",
+    "@hono/zod-validator": "^0.3.0",
+    "x402": "^0.6.1",
+    "mongodb": "^6.9.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.2",
+    "tsx": "^4.19.1",
+    "vitest": "^2.1.1",
+    "@types/node": "^22.7.4",
+    "eslint": "^9.11.1",
+    "prettier": "^3.3.3",
+    "@vitest/coverage-v8": "^2.1.1"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

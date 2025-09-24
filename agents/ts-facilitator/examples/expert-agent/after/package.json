@@ -1,0 +1,27 @@
+{
+  "name": "@nanda/expert-agent-after",
+  "version": "1.0.0",
+  "description": "Monetized MCP server example - after x402 integration",
+  "type": "module",
+  "private": true,
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/server.ts",
+    "start": "node dist/server.js",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.18.1",
+    "@nanda/x402-facilitator": "^1.0.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.2",
+    "tsx": "^4.19.1",
+    "@types/node": "^22.7.4"
+  },
+  "keywords": ["mcp", "server", "ai", "agents", "x402", "monetization", "nanda"],
+  "author": "NANDA",
+  "license": "MIT"
+}
