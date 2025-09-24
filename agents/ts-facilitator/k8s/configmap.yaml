@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: facilitator-config
+  namespace: nanda
+  labels:
+    app: facilitator
+    component: config
+data:
+  NODE_ENV: "production"
+  PORT: "8080"
+  MONGODB_DB_NAME: "nanda_production"
+  SESSION_EXPIRATION_MINUTES: "30"
+  PERIODIC_CLEANUP_MINUTES: "30"
+  LOG_LEVEL: "info"
+  CORS_ORIGINS: "https://app.example.com,https://api.example.com"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: facilitator-secrets
+  namespace: nanda
+  labels:
+    app: facilitator
+    component: secrets
+type: Opaque
+data:
+  # Base64 encoded values - replace with your actual encoded values
+  # echo -n "mongodb+srv://user:pass@cluster.mongodb.net/nanda" | base64
+  MONGODB_URI: bW9uZ29kYitzcnY6Ly91c2VyOnBhc3NAY2x1c3Rlci5tb25nb2RiLm5ldC9uYW5kYQ==
