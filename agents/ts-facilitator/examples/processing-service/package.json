@@ -1,0 +1,27 @@
+{
+  "name": "@nanda/example-processing-service",
+  "version": "1.0.0",
+  "description": "Example processing service with x402 payment for compute resources",
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx --watch src/server.ts",
+    "start": "node dist/server.js",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@nanda/sdk": "workspace:*",
+    "hono": "^4.6.3",
+    "zod": "^3.24.2",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.4",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
