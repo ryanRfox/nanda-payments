@@ -112,7 +112,7 @@ export class AgentService {
     const { limit = 20, offset = 0, search } = options;
 
     // Build query
-    const query: any = {};
+    const query: Record<string, any> = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
     if (search) {
       query.$or = [
         { agent_name: { $regex: search, $options: 'i' } },

@@ -110,7 +110,7 @@ export class TransactionService {
     } = query;
 
     // Build MongoDB query
-    const mongoQuery: any = {};
+    const mongoQuery: Record<string, any> = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
 
     if (agent_name) {
       mongoQuery.$or = [
@@ -228,7 +228,7 @@ export class TransactionService {
     from: string;
     to: string;
   }): Promise<TransactionSummary> {
-    const query: any = {};
+    const query: Record<string, any> = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
     if (dateRange) {
       query.createdAt = {
         $gte: dateRange.from,

@@ -19,7 +19,9 @@
     "test:coverage": "vitest --coverage",
     "type-check": "tsc --noEmit",
     "lint": "eslint src/**/*.ts",
-    "format": "prettier --write src/**/*.ts"
+    "format": "prettier --write src/**/*.ts",
+    "seed": "tsx src/scripts/seed.ts",
+    "clean": "rm -rf dist"
   },
   "keywords": [
     "x402",
@@ -37,7 +39,8 @@
     "@hono/zod-validator": "^0.3.0",
     "x402": "^0.6.1",
     "mongodb": "^6.9.0",
-    "zod": "^3.24.2"
+    "zod": "^3.24.2",
+    "dotenv": "^16.4.5"
   },
   "devDependencies": {
     "typescript": "^5.6.2",
@@ -45,6 +48,9 @@
     "vitest": "^2.1.1",
     "@types/node": "^22.7.4",
     "eslint": "^9.11.1",
+    "@eslint/js": "^9.11.1",
+    "@typescript-eslint/eslint-plugin": "^8.7.0",
+    "@typescript-eslint/parser": "^8.7.0",
     "prettier": "^3.3.3",
     "@vitest/coverage-v8": "^2.1.1"
   },

@@ -1,4 +1,4 @@
-import { MongoClient, Db, Collection } from 'mongodb';
+import { MongoClient, Db } from 'mongodb';
 import type { Config } from '../models/config.js';
 import type { Agent } from '../models/agent.js';
 import type { Wallet } from '../models/wallet.js';
@@ -86,7 +86,7 @@ export class DatabaseService {
         status: 'healthy',
         database: this.config.dbName,
       };
-    } catch (error) {
+    } catch {
       return {
         status: 'unhealthy',
         database: this.config.dbName,
@@ -138,7 +138,7 @@ export class DatabaseService {
    * Start a transaction session for atomic operations
    */
   async withTransaction<T>(
-    operation: (session: any) => Promise<T>
+    operation: (session: any) => Promise<T> // eslint-disable-line @typescript-eslint/no-explicit-any
   ): Promise<T> {
     if (!this.client) {
       throw new Error('Database not connected');

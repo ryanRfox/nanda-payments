@@ -129,7 +129,8 @@ export class PaymentSessionService {
    */
   async settlePayment(request: SettleRequest): Promise<SettleResponse> {
     try {
-      const { sessionId, paymentPayload } = request;
+      const { sessionId } = request;
+      // TODO: Use paymentPayload for validation in production
 
       // Get payment session
       const session = await this.getSession(sessionId);
@@ -280,7 +281,7 @@ export class PaymentSessionService {
   }> {
     const { status, fromAgent, toAgent, limit = 20, offset = 0 } = options;
 
-    const query: any = {};
+    const query: Record<string, any> = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
     if (status) query.status = status;
     if (fromAgent) query.fromAgent = fromAgent;
     if (toAgent) query.toAgent = toAgent;
