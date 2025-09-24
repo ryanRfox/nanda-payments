@@ -1,5 +1,7 @@
 import { randomUUID } from 'crypto';
 import type { DatabaseService } from './database.js';
+import type { WalletService } from './wallet-service.js';
+import type { TransactionService } from './transaction-service.js';
 import {
   PaymentSession,
   CreatePaymentSessionInput,
@@ -10,6 +12,7 @@ import {
   SettleResponse,
 } from '../models/payment-session.js';
 import type { Config } from '../models/config.js';
+import { NandaPoints } from '../models/wallet.js';
 
 /**
  * Payment Session Service
@@ -18,10 +21,65 @@ import type { Config } from '../models/config.js';
  * Handles session lifecycle, expiration, and state transitions.
  */
 export class PaymentSessionService {
+  private cleanupInterval: ReturnType<typeof setInterval> | null = null;
+
   constructor(
     private db: DatabaseService,
+    private walletService: WalletService,
+    private transactionService: TransactionService,
     private config: Config
-  ) {}
+  ) {
+    // Start automatic cleanup of expired sessions
+    this.startPeriodicCleanup();
+  }
+
+  /**
+   * Extract payment details from x402 payload (handles different formats)
+   */
+  private extractPaymentDetails(paymentPayload: unknown, paymentRequirements: unknown): {
+    fromWalletId: string;
+    toWalletId: string;
+    amount: string;
+  } {
+    let fromWalletId = '';
+    let toWalletId = '';
+    let amount = '';
+
+    const payload = paymentPayload as Record<string, unknown>;
+    const requirements = paymentRequirements as Record<string, unknown>;
+
+    // Handle EVM-style payload
+    if (payload?.payload) {
+      const innerPayload = payload.payload as Record<string, unknown>;
+      if (innerPayload?.authorization) {
+        // EVM authorization format
+        const auth = innerPayload.authorization as Record<string, unknown>;
+        fromWalletId = String(auth.from || '');
+        toWalletId = String(auth.to || '');
+        amount = String(auth.value || '');
+      } else {
+        // Other EVM format
+        fromWalletId = String(innerPayload.from || '');
+        toWalletId = String(innerPayload.to || '');
+        amount = String(innerPayload.value || innerPayload.amount || '');
+      }
+    } else {
+      // Direct payload (custom NANDA format)
+      fromWalletId = String(payload.from || '');
+      toWalletId = String(payload.to || '');
+      amount = String(payload.amount || '');
+    }
+
+    // Use payment requirements as fallback
+    if (!amount) {
+      amount = String(requirements.maxAmountRequired || requirements.amount || '');
+    }
+    if (!toWalletId) {
+      toWalletId = String(requirements.recipientAddress || requirements.recipient || '');
+    }
+
+    return { fromWalletId, toWalletId, amount };
+  }
 
   /**
    * Create a new payment session
@@ -45,10 +103,29 @@ export class PaymentSessionService {
   }
 
   /**
-   * Get payment session by ID
+   * Get payment session by ID (validates expiration)
    */
   async getSession(sessionId: string): Promise<PaymentSession | null> {
-    return await this.db.collections.paymentSessions.findOne({ sessionId });
+    const session = await this.db.collections.paymentSessions.findOne({ sessionId });
+
+    if (!session) {
+      return null;
+    }
+
+    // Check if session has expired
+    const now = new Date();
+    const expiresAt = new Date(session.expiresAt);
+
+    if (now > expiresAt && session.status !== 'settled') {
+      // Mark as expired if not already settled
+      await this.updateSession({
+        sessionId,
+        status: 'expired',
+      });
+      return null; // Return null for expired sessions
+    }
+
+    return session;
   }
 
   /**
@@ -71,38 +148,80 @@ export class PaymentSessionService {
    */
   async verifyPayment(request: VerifyRequest): Promise<VerifyResponse> {
     try {
-      // TODO: Implement actual x402 payment verification
-      // For now, simulate payment verification logic
-
       const { paymentPayload, paymentRequirements } = request;
 
-      // Extract payment information (would be from x402 payload)
-      const mockAmount = 1000; // 10.00 NP in minor units
-      const mockFromAgent = 'requesting-agent';
-      const mockToAgent = 'expert-agent';
-      const mockResource = '/api/search';
-
-      // Validate payment payload structure
+      // Step 1: Basic x402 payload validation
       if (!paymentPayload || !paymentRequirements) {
         return {
           valid: false,
-          reason: 'Invalid payment payload or requirements',
+          reason: 'Missing payment payload or requirements',
         };
       }
 
-      // Create payment session
+      if (paymentRequirements.scheme !== 'exact') {
+        return {
+          valid: false,
+          reason: 'Only "exact" payment scheme is supported',
+        };
+      }
+
+      // Step 2: Extract payment information from payload
+      const { fromWalletId, toWalletId, amount: amountString } = this.extractPaymentDetails(paymentPayload, paymentRequirements);
+      const resource = paymentRequirements.resource || 'unknown';
+
+      if (!fromWalletId || !toWalletId || !amountString) {
+        return {
+          valid: false,
+          reason: 'Missing required payment details: from, to, or amount',
+        };
+      }
+
+      // Convert amount to NANDA Points minor units
+      let amountMinor: number;
+      try {
+        // Assuming amount is in NP format like "10.50" or "0.001"
+        const npAmount = parseFloat(amountString.replace('$', ''));
+        amountMinor = NandaPoints.toMinor(npAmount);
+      } catch {
+        return {
+          valid: false,
+          reason: 'Invalid payment amount format',
+        };
+      }
+
+      // Step 3: Find source and destination agents by wallet IDs
+      const fromWallet = await this.db.collections.wallets.findOne({ walletId: fromWalletId });
+      const toWallet = await this.db.collections.wallets.findOne({ walletId: toWalletId });
+
+      if (!fromWallet || !toWallet) {
+        return {
+          valid: false,
+          reason: 'Source or destination wallet not found in NANDA network',
+        };
+      }
+
+      // Step 4: Verify sufficient balance
+      const balance = await this.walletService.getBalance(fromWallet.walletId);
+      if (!balance || balance.balanceMinor < amountMinor) {
+        return {
+          valid: false,
+          reason: `Insufficient balance. Required: ${NandaPoints.format(amountMinor)}, Available: ${balance ? NandaPoints.format(balance.balanceMinor) : '0.00 NP'}`,
+        };
+      }
+
+      // Step 5: Create payment session
       const now = new Date();
       const expiresAt = new Date(
         now.getTime() + this.config.security.sessionExpirationMinutes * 60 * 1000
       );
 
       const session = await this.createSession({
-        resourceServer: mockToAgent,
-        resource: mockResource,
-        amount: mockAmount,
+        resourceServer: toWallet.agent_name,
+        resource,
+        amount: amountMinor,
         currency: 'NP',
-        fromAgent: mockFromAgent,
-        toAgent: mockToAgent,
+        fromAgent: fromWallet.agent_name,
+        toAgent: toWallet.agent_name,
         status: 'verified',
         paymentRequirements,
         paymentPayload,
@@ -129,10 +248,9 @@ export class PaymentSessionService {
    */
   async settlePayment(request: SettleRequest): Promise<SettleResponse> {
     try {
-      const { sessionId } = request;
-      // TODO: Use paymentPayload for validation in production
+      const { sessionId, paymentPayload } = request;
 
-      // Get payment session
+      // Step 1: Get and validate payment session
       const session = await this.getSession(sessionId);
       if (!session) {
         return {
@@ -141,7 +259,7 @@ export class PaymentSessionService {
         };
       }
 
-      // Check session status and expiration
+      // Step 2: Check session status and expiration
       if (session.status !== 'verified') {
         return {
           settled: false,
@@ -152,32 +270,88 @@ export class PaymentSessionService {
       const now = new Date();
       const expiresAt = new Date(session.expiresAt);
       if (now > expiresAt) {
+        // Mark session as expired
+        await this.updateSession({
+          sessionId,
+          status: 'expired',
+        });
         return {
           settled: false,
           reason: 'Payment session expired',
         };
       }
 
-      // TODO: Implement actual settlement logic with wallet service
-      // For now, simulate successful settlement
+      // Step 3: Verify payment payload matches session (basic validation)
+      // For NANDA Points, we compare the essential payment details
+      const sessionFromWallet = await this.db.collections.wallets.findOne({ agent_name: session.fromAgent });
+      const sessionToWallet = await this.db.collections.wallets.findOne({ agent_name: session.toAgent });
 
-      // Update session status
+      if (!sessionFromWallet || !sessionToWallet) {
+        return {
+          settled: false,
+          reason: 'Cannot validate session wallet details',
+        };
+      }
+
+      // Extract current payload details for comparison
+      const { fromWalletId: currentFromWallet, toWalletId: currentToWallet } = this.extractPaymentDetails(paymentPayload, {});
+
+      if (currentFromWallet !== sessionFromWallet.walletId ||
+          currentToWallet !== sessionToWallet.walletId) {
+        return {
+          settled: false,
+          reason: 'Payment payload wallet addresses do not match verified session',
+        };
+      }
+
+      // Step 4: Find wallets
+      const fromWallet = await this.db.collections.wallets.findOne({
+        agent_name: session.fromAgent
+      });
+      const toWallet = await this.db.collections.wallets.findOne({
+        agent_name: session.toAgent
+      });
+
+      if (!fromWallet || !toWallet) {
+        return {
+          settled: false,
+          reason: 'Wallet not found for transaction',
+        };
+      }
+
+      // Step 5: Execute atomic transfer and create transaction record
+      const transaction = await this.transactionService.createTransaction({
+        fromWallet: fromWallet.walletId,
+        toWallet: toWallet.walletId,
+        amount: session.amount,
+        currency: 'NP',
+        type: 'payment',
+        status: 'completed',
+        metadata: {
+          session_id: sessionId,
+          agent_from: session.fromAgent,
+          agent_to: session.toAgent,
+          description: `x402 payment for ${session.resource}`,
+        },
+      });
+
+      // Step 6: Update session status
       await this.updateSession({
         sessionId,
         status: 'settled',
         settledAt: now.toISOString(),
       });
 
-      // Mock balance updates
-      const mockFromBalance = 90000; // 900.00 NP
-      const mockToBalance = 110000;  // 1100.00 NP
+      // Step 7: Get updated balances
+      const fromBalance = await this.walletService.getBalance(fromWallet.walletId);
+      const toBalance = await this.walletService.getBalance(toWallet.walletId);
 
       return {
         settled: true,
-        transactionId: randomUUID(),
+        transactionId: transaction.id,
         balance: {
-          from: mockFromBalance,
-          to: mockToBalance,
+          from: fromBalance?.balanceMinor || 0,
+          to: toBalance?.balanceMinor || 0,
         },
       };
 
@@ -191,14 +365,59 @@ export class PaymentSessionService {
   }
 
   /**
+   * Start periodic cleanup of expired sessions
+   */
+  private startPeriodicCleanup(): void {
+    // Clean up expired sessions every 5 minutes
+    const intervalMs = 5 * 60 * 1000;
+
+    this.cleanupInterval = setInterval(async () => {
+      try {
+        const cleaned = await this.cleanupExpiredSessions();
+        if (cleaned > 0) {
+          console.log(`🧹 Auto-cleaned ${cleaned} expired payment sessions`);
+        }
+      } catch (error) {
+        console.error('❌ Error during automatic session cleanup:', error);
+      }
+    }, intervalMs);
+
+    console.log('⏰ Started automatic payment session cleanup (every 5 minutes)');
+  }
+
+  /**
+   * Stop periodic cleanup
+   */
+  public stopPeriodicCleanup(): void {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+      console.log('🛑 Stopped automatic payment session cleanup');
+    }
+  }
+
+  /**
    * Clean up expired sessions
    */
   async cleanupExpiredSessions(): Promise<number> {
     const now = new Date().toISOString();
 
+    // First, mark expired sessions that aren't already marked
+    await this.db.collections.paymentSessions.updateMany(
+      {
+        expiresAt: { $lt: now },
+        status: { $in: ['pending', 'verified'] }
+      },
+      {
+        $set: { status: 'expired' }
+      }
+    );
+
+    // Then delete old expired sessions (older than 24 hours)
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const result = await this.db.collections.paymentSessions.deleteMany({
-      expiresAt: { $lt: now },
-      status: { $in: ['pending', 'verified'] }, // Don't delete settled sessions
+      expiresAt: { $lt: oneDayAgo },
+      status: 'expired'
     });
 
     return result.deletedCount || 0;
@@ -275,16 +494,26 @@ export class PaymentSessionService {
     toAgent?: string;
     limit?: number;
     offset?: number;
+    includeExpired?: boolean; // Option to include expired sessions
   } = {}): Promise<{
     sessions: PaymentSession[];
     total: number;
   }> {
-    const { status, fromAgent, toAgent, limit = 20, offset = 0 } = options;
+    const { status, fromAgent, toAgent, limit = 20, offset = 0, includeExpired = false } = options;
 
     const query: Record<string, any> = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
     if (status) query.status = status;
     if (fromAgent) query.fromAgent = fromAgent;
     if (toAgent) query.toAgent = toAgent;
+
+    // Filter out expired sessions by default
+    if (!includeExpired) {
+      const now = new Date().toISOString();
+      query.$or = [
+        { status: 'settled' }, // Always include settled sessions
+        { expiresAt: { $gte: now } } // Include non-expired sessions
+      ];
+    }
 
     const [sessions, total] = await Promise.all([
       this.db.collections.paymentSessions

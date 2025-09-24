@@ -60,7 +60,7 @@ async function initializeServices(): Promise<AppState> {
   const walletService = new WalletService(db);
   const agentService = new AgentService(db, walletService, config);
   const transactionService = new TransactionService(db, walletService);
-  const paymentSessionService = new PaymentSessionService(db, config);
+  const paymentSessionService = new PaymentSessionService(db, walletService, transactionService, config);
 
   console.log('✅ All services initialized');
 
@@ -134,10 +134,13 @@ function setupGracefulShutdown(services: AppState) {
     console.log(`\n🛑 Received ${signal}, shutting down gracefully...`);
 
     try {
-      // Cleanup expired payment sessions
+      // Stop periodic cleanup
+      services.paymentSessionService.stopPeriodicCleanup();
+
+      // Final cleanup of expired payment sessions
       const cleanedSessions = await services.paymentSessionService.cleanupExpiredSessions();
       if (cleanedSessions > 0) {
-        console.log(`🧹 Cleaned up ${cleanedSessions} expired sessions`);
+        console.log(`🧹 Final cleanup: ${cleanedSessions} expired sessions`);
       }
 
       // Close database connection

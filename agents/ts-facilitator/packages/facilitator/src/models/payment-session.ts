@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PaymentRequirementsSchema, PaymentPayloadSchema } from 'x402/types';
 
 /**
  * Payment Session Model
@@ -18,8 +19,8 @@ export const PaymentSessionSchema = z.object({
   status: z.enum(['pending', 'verified', 'settled', 'expired']),
 
   // x402 Data
-  paymentRequirements: z.any(), // x402.PaymentRequirements
-  paymentPayload: z.any().optional(), // x402.PaymentPayload (set during verify)
+  paymentRequirements: PaymentRequirementsSchema,
+  paymentPayload: PaymentPayloadSchema.optional(),
 
   // Timestamps
   expiresAt: z.string(),
@@ -55,8 +56,8 @@ export type UpdatePaymentSessionInput = z.infer<typeof UpdatePaymentSessionSchem
  * Verify request schema (x402 /verify endpoint)
  */
 export const VerifyRequestSchema = z.object({
-  paymentPayload: z.any(), // x402.PaymentPayload
-  paymentRequirements: z.any(), // x402.PaymentRequirements
+  paymentPayload: PaymentPayloadSchema,
+  paymentRequirements: PaymentRequirementsSchema,
 });
 
 export type VerifyRequest = z.infer<typeof VerifyRequestSchema>;
@@ -78,7 +79,7 @@ export type VerifyResponse = z.infer<typeof VerifyResponseSchema>;
  */
 export const SettleRequestSchema = z.object({
   sessionId: z.string().uuid(),
-  paymentPayload: z.any(), // x402.PaymentPayload
+  paymentPayload: PaymentPayloadSchema,
 });
 
 export type SettleRequest = z.infer<typeof SettleRequestSchema>;
