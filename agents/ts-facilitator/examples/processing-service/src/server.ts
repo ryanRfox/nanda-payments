@@ -13,12 +13,15 @@ interface Job {
   id: string;
   type: string;
   parameters: JobParameters;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'queued';
   cost: number;
   createdAt: string;
   completedAt?: string;
   result?: unknown;
   error?: string;
+  startedAt?: string;
+  processingTimeMs?: number;
+  estimatedTime?: string;
 }
 
 /**
@@ -43,8 +46,33 @@ const nandaClient = new NandaClient({
 const jobStorage = new Map<string, Job>();
 const jobQueue: Job[] = [];
 
+// Job configuration types
+interface BaseJobConfig {
+  baseCost: number;
+  description: string;
+  estimatedTime: string;
+}
+
+interface FileSizeJobConfig extends BaseJobConfig {
+  costPerMB: number;
+}
+
+interface DataJobConfig extends BaseJobConfig {
+  costPerRow: number;
+}
+
+interface MLJobConfig extends BaseJobConfig {
+  costPerSample: number;
+}
+
+interface ReportJobConfig extends BaseJobConfig {
+  costPerPage: number;
+}
+
+type JobConfig = FileSizeJobConfig | DataJobConfig | MLJobConfig | ReportJobConfig;
+
 // Processing job types with different costs
-const PROCESSING_JOBS = {
+const PROCESSING_JOBS: Record<string, JobConfig> = {
   'image-resize': {
     baseCost: 10, // 0.10 NP
     costPerMB: 5,  // 0.05 NP per MB
@@ -79,7 +107,7 @@ const PROCESSING_JOBS = {
 
 // Calculate job cost based on parameters
 const calculateJobCost = (jobType: string, parameters: JobParameters): number => {
-  const jobConfig = PROCESSING_JOBS[jobType as keyof typeof PROCESSING_JOBS];
+  const jobConfig = PROCESSING_JOBS[jobType];
   if (!jobConfig) return 0;
 
   let cost = jobConfig.baseCost;
@@ -87,23 +115,27 @@ const calculateJobCost = (jobType: string, parameters: JobParameters): number =>
   switch (jobType) {
     case 'image-resize':
     case 'video-transcode':
-      if (parameters.fileSizeMB) {
-        cost += Math.ceil(parameters.fileSizeMB) * (jobConfig.costPerMB || 0);
+      if (parameters.fileSizeMB && typeof parameters.fileSizeMB === 'number') {
+        const config = jobConfig as FileSizeJobConfig;
+        cost += Math.ceil(parameters.fileSizeMB) * config.costPerMB;
       }
       break;
     case 'data-analysis':
-      if (parameters.rowCount) {
-        cost += Math.ceil(parameters.rowCount / 1000) * (jobConfig.costPerRow || 0);
+      if (parameters.rowCount && typeof parameters.rowCount === 'number') {
+        const config = jobConfig as DataJobConfig;
+        cost += Math.ceil(parameters.rowCount / 1000) * config.costPerRow;
       }
       break;
     case 'ml-inference':
-      if (parameters.sampleCount) {
-        cost += parameters.sampleCount * (jobConfig.costPerSample || 0);
+      if (parameters.sampleCount && typeof parameters.sampleCount === 'number') {
+        const config = jobConfig as MLJobConfig;
+        cost += parameters.sampleCount * config.costPerSample;
       }
       break;
     case 'report-generation':
-      if (parameters.pageCount) {
-        cost += parameters.pageCount * (jobConfig.costPerPage || 0);
+      if (parameters.pageCount && typeof parameters.pageCount === 'number') {
+        const config = jobConfig as ReportJobConfig;
+        cost += parameters.pageCount * config.costPerPage;
       }
       break;
   }
@@ -144,7 +176,11 @@ const calculateProcessingTime = (jobType: string, parameters: JobParameters): nu
     'report-generation': 4000
   }[jobType] || 1000;
 
-  const complexityMultiplier = Math.max(1, (parameters.fileSizeMB || parameters.rowCount / 1000 || parameters.sampleCount / 10 || parameters.pageCount || 1));
+  const fileSizeMB = typeof parameters.fileSizeMB === 'number' ? parameters.fileSizeMB : 0;
+  const rowCount = typeof parameters.rowCount === 'number' ? parameters.rowCount / 1000 : 0;
+  const sampleCount = typeof parameters.sampleCount === 'number' ? parameters.sampleCount / 10 : 0;
+  const pageCount = typeof parameters.pageCount === 'number' ? parameters.pageCount : 0;
+  const complexityMultiplier = Math.max(1, fileSizeMB || rowCount || sampleCount || pageCount || 1);
 
   return Math.floor(baseTime * complexityMultiplier * (0.8 + Math.random() * 0.4));
 };
@@ -183,7 +219,7 @@ const generateMockResult = (jobType: string, parameters: JobParameters): unknown
     case 'ml-inference':
       return {
         model: parameters.modelType || 'classification',
-        predictions: Array.from({ length: parameters.sampleCount || 1 }, () => ({
+        predictions: Array.from({ length: typeof parameters.sampleCount === 'number' ? parameters.sampleCount : 1 }, () => ({
           class: Math.random() > 0.5 ? 'positive' : 'negative',
           confidence: Math.random()
         })),
