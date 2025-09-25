@@ -1,8 +1,25 @@
-import { Hono } from 'hono';
+import { Hono, Context, Next } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { NandaClient } from '@nanda/sdk';
+import { NandaClient } from '../../shared/nanda-client.js';
 import 'dotenv/config';
+
+// Job type definitions
+interface JobParameters {
+  [key: string]: unknown;
+}
+
+interface Job {
+  id: string;
+  type: string;
+  parameters: JobParameters;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  cost: number;
+  createdAt: string;
+  completedAt?: string;
+  result?: unknown;
+  error?: string;
+}
 
 /**
  * Example Processing Service with x402 Payment for Compute Resources
@@ -23,8 +40,8 @@ const nandaClient = new NandaClient({
 });
 
 // Mock job storage (in production, use Redis or database)
-const jobStorage = new Map<string, any>();
-const jobQueue: any[] = [];
+const jobStorage = new Map<string, Job>();
+const jobQueue: Job[] = [];
 
 // Processing job types with different costs
 const PROCESSING_JOBS = {
@@ -61,7 +78,7 @@ const PROCESSING_JOBS = {
 };
 
 // Calculate job cost based on parameters
-const calculateJobCost = (jobType: string, parameters: any): number => {
+const calculateJobCost = (jobType: string, parameters: JobParameters): number => {
   const jobConfig = PROCESSING_JOBS[jobType as keyof typeof PROCESSING_JOBS];
   if (!jobConfig) return 0;
 
@@ -95,7 +112,7 @@ const calculateJobCost = (jobType: string, parameters: any): number => {
 };
 
 // Job processing simulation
-const processJob = async (jobId: string, jobType: string, parameters: any): Promise<any> => {
+const processJob = async (jobId: string, jobType: string, parameters: JobParameters): Promise<unknown> => {
   const job = jobStorage.get(jobId);
   if (!job) throw new Error('Job not found');
 
@@ -117,7 +134,7 @@ const processJob = async (jobId: string, jobType: string, parameters: any): Prom
   return job;
 };
 
-const calculateProcessingTime = (jobType: string, parameters: any): number => {
+const calculateProcessingTime = (jobType: string, parameters: JobParameters): number => {
   // Simulate realistic processing times
   const baseTime = {
     'image-resize': 1000,
@@ -132,7 +149,7 @@ const calculateProcessingTime = (jobType: string, parameters: any): number => {
   return Math.floor(baseTime * complexityMultiplier * (0.8 + Math.random() * 0.4));
 };
 
-const generateMockResult = (jobType: string, parameters: any): any => {
+const generateMockResult = (jobType: string, parameters: JobParameters): unknown => {
   switch (jobType) {
     case 'image-resize':
       return {
@@ -187,7 +204,7 @@ const generateMockResult = (jobType: string, parameters: any): any => {
 
 // Middleware for job payment
 const requireJobPayment = () => {
-  return async (c: any, next: any) => {
+  return async (c: Context, next: Next) => {
     const jobType = c.req.valid('json').jobType;
     const parameters = c.req.valid('json').parameters || {};
 

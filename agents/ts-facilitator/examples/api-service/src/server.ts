@@ -1,7 +1,7 @@
-import { Hono } from 'hono';
+import { Hono, Context, Next } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { NandaClient } from '@nanda/sdk';
+import { NandaClient } from '../../shared/nanda-client.js';
 import 'dotenv/config';
 
 /**
@@ -21,7 +21,7 @@ const nandaClient = new NandaClient({
 
 // Middleware to check x402 payments
 const requirePayment = (costNP: number, description: string) => {
-  return async (c: any, next: any) => {
+  return async (c: Context, next: Next) => {
     const paymentHeader = c.req.header('x-payment');
 
     if (!paymentHeader) {

@@ -1,8 +1,29 @@
-import { Hono } from 'hono';
+import { Hono, Context, Next } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { NandaClient } from '@nanda/sdk';
+import { NandaClient } from '../../shared/nanda-client.js';
 import 'dotenv/config';
+
+// Article type definitions
+interface Article {
+  id: string;
+  title: string;
+  category: string;
+  tier: 'free' | 'premium';
+  preview: string;
+  content: string;
+  wordCount: number;
+  publishedAt: string;
+  cost?: number;
+}
+
+// Extended context type with article and paymentSession
+interface ExtendedContext extends Context {
+  get(key: 'article'): Article | undefined;
+  get(key: 'paymentSession'): string | undefined;
+  set(key: 'article', value: Article): void;
+  set(key: 'paymentSession', value: string): void;
+}
 
 /**
  * Example Content Service with x402 Paywall Integration
@@ -22,7 +43,7 @@ const nandaClient = new NandaClient({
 });
 
 // Mock content database
-const mockArticles = [
+const mockArticles: Article[] = [
   {
     id: 'free-001',
     title: 'Introduction to AI Agents',
@@ -281,7 +302,7 @@ This comprehensive guide continues with detailed coverage of monitoring, securit
 
 // Payment middleware for content access
 const requireContentPayment = (articleId: string) => {
-  return async (c: any, next: any) => {
+  return async (c: ExtendedContext, next: Next) => {
     const article = mockArticles.find(a => a.id === articleId);
 
     if (!article) {
@@ -328,7 +349,9 @@ const requireContentPayment = (articleId: string) => {
       }
 
       c.set('article', article);
-      c.set('paymentSession', verification.sessionId);
+      if (verification.sessionId) {
+        c.set('paymentSession', verification.sessionId);
+      }
 
       await next();
 
@@ -434,9 +457,13 @@ app.get('/articles/:id',
     const articleId = c.req.param('id');
     return requireContentPayment(articleId)(c, next);
   },
-  (c) => {
+  (c: ExtendedContext) => {
     const article = c.get('article');
     const paymentSession = c.get('paymentSession');
+
+    if (!article) {
+      return c.json({ error: 'Article not found in context' }, 404);
+    }
 
     return c.json({
       id: article.id,
