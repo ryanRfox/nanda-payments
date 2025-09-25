@@ -238,11 +238,13 @@ const generateMockResult = (jobType: string, parameters: JobParameters): unknown
   }
 };
 
+
 // Middleware for job payment
 const requireJobPayment = () => {
-  return async (c: Context, next: Next) => {
-    const jobType = c.req.valid('json').jobType;
-    const parameters = c.req.valid('json').parameters || {};
+  return async (c: ExtendedContext, next: Next) => {
+    const validatedData = (c.req as any).valid('json') as JobData;
+    const jobType = validatedData.jobType;
+    const parameters = validatedData.parameters || {};
 
     const cost = calculateJobCost(jobType, parameters);
     const jobConfig = PROCESSING_JOBS[jobType as keyof typeof PROCESSING_JOBS];
@@ -272,10 +274,10 @@ const requireJobPayment = () => {
       const paymentData = JSON.parse(paymentHeader);
       const verification = await nandaClient.verifyPayment(paymentData);
 
-      if (!verification.valid) {
+      if (!verification.valid || !verification.sessionId) {
         return c.json({
           error: 'Invalid Payment',
-          reason: verification.reason
+          reason: verification.reason || 'Missing session ID'
         }, 402);
       }
 
@@ -371,11 +373,22 @@ const jobSchema = z.object({
   priority: z.enum(['low', 'normal', 'high']).optional().default('normal')
 });
 
+// Create type for validated job data
+type JobData = z.infer<typeof jobSchema>;
+
+// Extended context type for middleware variables
+interface ExtendedContext extends Context {
+  get(key: 'paymentSession'): string | undefined;
+  get(key: 'jobCost'): number | undefined;
+  set(key: 'paymentSession', value: string): void;
+  set(key: 'jobCost', value: number): void;
+}
+
 app.post('/jobs',
   zValidator('json', jobSchema),
   requireJobPayment(),
-  async (c) => {
-    const { jobType, parameters = {}, priority } = c.req.valid('json');
+  async (c: ExtendedContext) => {
+    const { jobType, parameters = {}, priority } = (c.req as any).valid('json') as JobData;
     const paymentSession = c.get('paymentSession');
     const jobCost = c.get('jobCost');
 
@@ -383,14 +396,12 @@ app.post('/jobs',
     const jobId = `job_${Date.now()}_${Math.random().toString(36).substring(2)}`;
 
     // Create job record
-    const job = {
+    const job: Job = {
       id: jobId,
       type: jobType,
       parameters,
-      priority,
-      status: 'queued',
-      cost: jobCost,
-      paymentSession,
+      status: 'queued' as const,
+      cost: jobCost || 0,
       createdAt: new Date().toISOString(),
       estimatedTime: PROCESSING_JOBS[jobType as keyof typeof PROCESSING_JOBS].estimatedTime
     };
