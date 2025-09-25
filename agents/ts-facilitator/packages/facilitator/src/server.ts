@@ -3,13 +3,14 @@
 /**
  * NANDA Facilitator Server
  *
- * High-performance x402 payment facilitator built with:
- * - Hono web framework for speed and TypeScript support
- * - MongoDB for NANDA Points storage and transaction history
- * - Comprehensive x402 protocol compliance
- * - Block explorer APIs for transaction visibility
+ * Pure Hono x402 payment facilitator following:
+ * - Cloudflare patterns: Pure Hono app export
+ * - Coinbase patterns: Simple verify/settle functions
+ * - MongoDB for NANDA Points ledger interface
+ * - Node.js native HTTP server for runtime
  */
 
+import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
@@ -75,51 +76,51 @@ async function initializeServices(): Promise<AppState> {
 }
 
 /**
- * Create Hono application with all routes and middleware
+ * Create pure Hono application following Cloudflare patterns
+ * Exports app directly like Cloudflare x402 reference
  */
-function createApp(services: AppState): Hono {
+export function createApp(services: AppState): Hono {
   const app = new Hono();
 
-  // Global middleware
+  // Middleware (Cloudflare pattern - minimal, focused)
   app.use('*', logger());
+  app.use('*', cors({
+    origin: services.config.server.cors.origins,
+    allowMethods: ['GET', 'POST', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'X-Payment', 'X-PAYMENT', 'X-Payment-Response', 'X-PAYMENT-RESPONSE'],
+  }));
   app.use('*', prettyJSON());
-  app.use(
-    '*',
-    cors({
-      origin: services.config.server.cors.origins,
-      allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-      allowHeaders: ['Content-Type', 'Authorization', 'X-Payment'],
-    })
-  );
 
-  // Mount route groups
-  app.route('/', createHealthRoutes(services.db, services.paymentSessionService));
-  app.route('/', createFacilitatorRoutes(services.paymentSessionService));
-  app.route('/', createExplorerRoutes(
+  // Mount routes directly (simpler pattern)
+  const healthRoutes = createHealthRoutes(services.db, services.paymentSessionService);
+  const facilitatorRoutes = createFacilitatorRoutes(services.paymentSessionService);
+  const explorerRoutes = createExplorerRoutes(
     services.transactionService,
     services.walletService,
     services.agentService
-  ));
+  );
 
-  // 404 handler
-  app.notFound((c) => {
-    return c.json({
-      error: 'Not Found',
-      message: 'The requested endpoint does not exist',
-      endpoints: {
-        facilitator: ['/verify', '/settle'],
-        explorer: ['/api/v1/transactions', '/api/v1/agents/:name/balance', '/api/v1/stats'],
-        health: ['/health', '/ready', '/metrics', '/version'],
-      },
-    }, 404);
-  });
+  // Apply routes
+  app.route('/', healthRoutes);
+  app.route('/', facilitatorRoutes);
+  app.route('/', explorerRoutes);
 
-  // Global error handler
+  // Simple 404 handler
+  app.notFound((c) => c.json({
+    error: 'Not Found',
+    endpoints: {
+      core: ['/verify', '/settle'],
+      explorer: ['/api/v1/stats', '/api/v1/agents/:name/balance'],
+      health: ['/health', '/ready'],
+    },
+  }, 404));
+
+  // Simple error handler
   app.onError((err, c) => {
-    console.error('Unhandled error:', err);
+    console.error('Error:', err);
     return c.json({
       error: 'Internal Server Error',
-      message: services.config.nodeEnv === 'development' ? err.message : 'An unexpected error occurred',
+      message: services.config.nodeEnv === 'development' ? err.message : undefined,
     }, 500);
   });
 
@@ -134,16 +135,7 @@ function setupGracefulShutdown(services: AppState) {
     console.log(`\n🛑 Received ${signal}, shutting down gracefully...`);
 
     try {
-      // Stop periodic cleanup
-      services.paymentSessionService.stopPeriodicCleanup();
-
-      // Final cleanup of expired payment sessions
-      const cleanedSessions = await services.paymentSessionService.cleanupExpiredSessions();
-      if (cleanedSessions > 0) {
-        console.log(`🧹 Final cleanup: ${cleanedSessions} expired sessions`);
-      }
-
-      // Close database connection
+      // Simple shutdown - close database connection
       await services.db.disconnect();
 
       console.log('✅ Graceful shutdown completed');
@@ -177,30 +169,31 @@ async function main() {
     const { host, port } = services.config.server;
 
     console.log(`🌟 NANDA Facilitator starting on http://${host}:${port}`);
-    console.log('📋 Available endpoints:');
+    console.log('📋 Core endpoints (Coinbase pattern):');
     console.log('  • POST /verify - Verify x402 payment');
     console.log('  • POST /settle - Settle verified payment');
-    console.log('  • GET /api/v1/transactions - List transactions');
-    console.log('  • GET /api/v1/agents/:name/balance - Agent balance');
+    console.log('');
+    console.log('🔍 Explorer endpoints:');
     console.log('  • GET /api/v1/stats - Network statistics');
-    console.log('  • GET /health - Health check');
-    console.log('  • GET /ready - Readiness probe');
-    console.log('  • GET /metrics - Prometheus metrics');
+    console.log('  • GET /api/v1/agents/:name/balance - Agent balance');
     console.log('');
-    console.log('💰 NANDA Points (NP) - MongoDB-backed payment system');
-    console.log('🔗 x402 Protocol - HTTP-native payment verification');
-    console.log('⚡ Hono Framework - High-performance TypeScript server');
+    console.log('💰 NANDA Points - MongoDB ledger');
+    console.log('⚡ Pure Hono - Cloudflare patterns');
     console.log('');
-
-    // Start HTTP server
-    const server = { port, fetch: app.fetch };
 
     console.log(`✅ NANDA Facilitator ready at http://${host}:${port}`);
     console.log(`🔍 Block Explorer: http://${host}:${port}/api/v1/stats`);
     console.log(`❤️  Health Check: http://${host}:${port}/health`);
 
-    // Keep the process alive
-    await new Promise(() => {});
+    // Use official Hono Node.js adapter (industry standard)
+    // Proper Web Standards compliance with Node.js integration
+    serve({
+      fetch: app.fetch,
+      port,
+      hostname: host,
+    }, () => {
+      console.log(`🚀 Server listening on http://${host}:${port}`);
+    });
 
   } catch (error) {
     console.error('❌ Failed to start NANDA Facilitator:', error);

@@ -216,6 +216,9 @@ const sampleAgents: CreateAgentInput[] = [
 async function seed() {
   console.log('🌱 Starting database seed...');
 
+  // Check for --reset flag to clear existing data
+  const shouldReset = process.argv.includes('--reset');
+
   const config = loadConfig();
   const db = new DatabaseService(config.mongodb);
 
@@ -228,12 +231,16 @@ async function seed() {
     const walletService = new WalletService(db);
     const agentService = new AgentService(db, walletService, config);
 
-    // Clear existing data (optional - comment out to keep existing data)
-    console.log('🧹 Clearing existing data...');
-    await db.collections.agents.deleteMany({});
-    await db.collections.wallets.deleteMany({});
-    await db.collections.transactions.deleteMany({});
-    await db.collections.paymentSessions.deleteMany({});
+    // Only clear existing data if --reset flag is provided
+    if (shouldReset) {
+      console.log('🧹 Clearing existing data (--reset flag provided)...');
+      await db.collections.agents.deleteMany({});
+      await db.collections.wallets.deleteMany({});
+      await db.collections.transactions.deleteMany({});
+      await db.collections.paymentSessions.deleteMany({});
+    } else {
+      console.log('📄 Preserving existing data (use --reset to clear)...');
+    }
 
     // Seed agents (which automatically creates wallets)
     console.log('🏗️ Creating agents and wallets...');

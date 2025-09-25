@@ -27,6 +27,11 @@ export class DatabaseService {
     try {
       this.client = new MongoClient(this.config.uri, {
         maxPoolSize: this.config.maxConnections,
+        // Force IPv4 to prevent IPv6 connection issues
+        family: 4,
+        // Reduce timeout to fail fast on connection issues
+        serverSelectionTimeoutMS: 5000,
+        connectTimeoutMS: 10000,
       });
 
       await this.client.connect();
@@ -100,58 +105,64 @@ export class DatabaseService {
   private async ensureIndexes(): Promise<void> {
     const { agents, wallets, transactions, paymentSessions } = this.collections;
 
-    await Promise.all([
-      // Agents collection indexes
-      agents.createIndex({ agent_name: 1 }, { unique: true }),
-      agents.createIndex({ walletId: 1 }, { unique: true, sparse: true }),
-      agents.createIndex({ email: 1 }, { unique: true }),
-      agents.createIndex({ created_at: -1 }),
+    // Helper to create index safely (ignore if exists)
+    const createIndexSafe = async (collection: any, spec: any, options?: any) => {
+      try {
+        await collection.createIndex(spec, options);
+      } catch (error: any) {
+        // Ignore index already exists errors
+        if (error.code !== 86 && error.codeName !== 'IndexKeySpecsConflict') {
+          throw error;
+        }
+      }
+    };
 
-      // Wallets collection indexes
-      wallets.createIndex({ walletId: 1 }, { unique: true }),
-      wallets.createIndex({ agent_name: 1 }, { unique: true }),
-      wallets.createIndex({ balanceMinor: 1 }),
-      wallets.createIndex({ updatedAt: -1 }),
+    // Create indexes one by one to handle conflicts
+    // Agents collection indexes
+    await createIndexSafe(agents, { agent_name: 1 }, { unique: true });
+    await createIndexSafe(agents, { walletId: 1 }, { unique: true, sparse: true });
+    await createIndexSafe(agents, { email: 1 }, { unique: true, sparse: true });
+    await createIndexSafe(agents, { created_at: -1 });
 
-      // Transactions collection indexes
-      transactions.createIndex({ id: 1 }, { unique: true }),
-      transactions.createIndex({ fromWallet: 1, createdAt: -1 }),
-      transactions.createIndex({ toWallet: 1, createdAt: -1 }),
-      transactions.createIndex({ status: 1, createdAt: -1 }),
-      transactions.createIndex({ type: 1, createdAt: -1 }),
-      transactions.createIndex({ 'metadata.agent_from': 1 }),
-      transactions.createIndex({ 'metadata.agent_to': 1 }),
-      transactions.createIndex({ 'metadata.session_id': 1 }),
+    // Wallets collection indexes
+    await createIndexSafe(wallets, { walletId: 1 }, { unique: true });
+    await createIndexSafe(wallets, { agent_name: 1 });
+    await createIndexSafe(wallets, { balanceMinor: 1 });
+    await createIndexSafe(wallets, { updatedAt: -1 });
 
-      // Payment sessions collection indexes
-      paymentSessions.createIndex({ sessionId: 1 }, { unique: true }),
-      paymentSessions.createIndex({ status: 1, expiresAt: 1 }),
-      paymentSessions.createIndex({ fromAgent: 1, createdAt: -1 }),
-      paymentSessions.createIndex({ toAgent: 1, createdAt: -1 }),
-      paymentSessions.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }), // TTL index
-    ]);
+    // Transactions collection indexes
+    await createIndexSafe(transactions, { id: 1 }, { unique: true });
+    await createIndexSafe(transactions, { fromWallet: 1, createdAt: -1 });
+    await createIndexSafe(transactions, { toWallet: 1, createdAt: -1 });
+    await createIndexSafe(transactions, { status: 1, createdAt: -1 });
+    await createIndexSafe(transactions, { type: 1, createdAt: -1 });
+    await createIndexSafe(transactions, { 'metadata.agent_from': 1 });
+    await createIndexSafe(transactions, { 'metadata.agent_to': 1 });
+    await createIndexSafe(transactions, { 'metadata.session_id': 1 });
+
+    // Payment sessions collection indexes
+    await createIndexSafe(paymentSessions, { sessionId: 1 }, { unique: true });
+    await createIndexSafe(paymentSessions, { status: 1, expiresAt: 1 });
+    await createIndexSafe(paymentSessions, { fromAgent: 1, createdAt: -1 });
+    await createIndexSafe(paymentSessions, { toAgent: 1, createdAt: -1 });
+    await createIndexSafe(paymentSessions, { expiresAt: 1 }, { expireAfterSeconds: 0 });
 
     console.log('✅ Database indexes ensured');
   }
 
+
   /**
-   * Start a transaction session for atomic operations
+   * Execute operation without transactions (standalone MongoDB)
+   * Simplified for development - no replica set complexity
    */
   async withTransaction<T>(
-    operation: (session: any) => Promise<T> // eslint-disable-line @typescript-eslint/no-explicit-any
+    operation: () => Promise<T> // Removed session parameter - always null for standalone
   ): Promise<T> {
     if (!this.client) {
       throw new Error('Database not connected');
     }
 
-    const session = this.client.startSession();
-
-    try {
-      return await session.withTransaction(async () => {
-        return await operation(session);
-      });
-    } finally {
-      await session.endSession();
-    }
+    // Always run without transactions in standalone mode
+    return await operation();
   }
 }

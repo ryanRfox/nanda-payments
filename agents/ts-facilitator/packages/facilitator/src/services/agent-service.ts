@@ -36,13 +36,14 @@ export class AgentService {
       updated_at: now,
     };
 
-    // Create agent and wallet atomically
-    return await this.db.withTransaction(async (session) => {
+    // Create agent and wallet together
+    return await this.db.withTransaction(async () => {
       // Insert agent
-      await this.db.collections.agents.insertOne(agent, { session });
+      await this.db.collections.agents.insertOne(agent);
 
-      // Create associated wallet
+      // Create associated wallet with the same walletId as the agent
       await this.walletService.createWallet({
+        walletId: agent.walletId, // Use the same UUID as the agent
         agent_name: agent.agent_name,
         currency: 'NP',
         scale: 2,
@@ -176,17 +177,15 @@ export class AgentService {
     const agent = await this.getAgentByName(agentName);
     if (!agent) return false;
 
-    return await this.db.withTransaction(async (session) => {
+    return await this.db.withTransaction(async () => {
       // Delete agent
       await this.db.collections.agents.deleteOne(
-        { agent_name: agentName },
-        { session }
+        { agent_name: agentName }
       );
 
       // Delete associated wallet
       await this.db.collections.wallets.deleteOne(
-        { walletId: agent.walletId },
-        { session }
+        { walletId: agent.walletId }
       );
 
       return true;

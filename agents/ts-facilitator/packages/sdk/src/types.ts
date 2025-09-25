@@ -68,18 +68,35 @@ export const PaymentSessionResponseSchema = z.object({
 export type PaymentSessionResponse = z.infer<typeof PaymentSessionResponseSchema>;
 
 /**
- * Network Statistics
+ * Network Statistics (matches facilitator API structure)
  */
 export const NetworkStatsResponseSchema = z.object({
-  totalAgents: z.number(),
-  totalTransactions: z.number(),
-  totalVolume: z.number(),
-  averageTransactionAmount: z.number(),
-  topAgentsByVolume: z.array(z.object({
-    agent_name: z.string(),
+  wallets: z.object({
+    totalWallets: z.number(),
+    activeWallets: z.number(),
+    totalBalance: z.number(),
+    totalBalanceFormatted: z.string(),
+    averageBalance: z.number(),
+  }),
+  agents: z.object({
+    totalAgents: z.number(),
+    activeAgents: z.number(),
+    averageServiceCharge: z.number(),
+    topAgentsByServiceCharge: z.array(z.object({
+      agent_name: z.string(),
+      serviceCharge: z.number(),
+    })),
+  }),
+  transactions: z.object({
+    totalTransactions: z.number(),
     totalVolume: z.number(),
-    transactionCount: z.number(),
-  })),
+    totalVolumeFormatted: z.string(),
+    pendingTransactions: z.number(),
+    completedTransactions: z.number(),
+    failedTransactions: z.number(),
+    averageTransactionValue: z.number(),
+  }),
+  timestamp: z.string(),
 });
 
 export type NetworkStatsResponse = z.infer<typeof NetworkStatsResponseSchema>;
