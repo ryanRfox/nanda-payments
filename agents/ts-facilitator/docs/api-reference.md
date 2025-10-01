@@ -5,7 +5,7 @@ Complete API reference for the NANDA TypeScript Facilitator service. The facilit
 ## Base URL
 
 ```
-http://localhost:8080  # Default development
+http://localhost:3000  # Default development
 ```
 
 ## Authentication
@@ -453,7 +453,7 @@ Use the official NANDA SDK for TypeScript/JavaScript:
 import { NandaClient } from '@nanda/sdk';
 
 const client = new NandaClient({
-  facilitatorUrl: 'http://localhost:8080'
+  facilitatorUrl: 'http://localhost:3000'
 });
 
 // Verify payment

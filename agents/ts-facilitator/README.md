@@ -162,13 +162,13 @@ Live network data and transaction history:
 
 ```bash
 # Get agent balance
-curl http://localhost:8080/api/v1/agents/my-agent/balance
+curl http://localhost:3000/api/v1/agents/my-agent/balance
 
 # List recent transactions
-curl http://localhost:8080/api/v1/transactions?limit=10
+curl http://localhost:3000/api/v1/transactions?limit=10
 
 # Network statistics
-curl http://localhost:8080/api/v1/stats
+curl http://localhost:3000/api/v1/stats
 ```
 
 ## 📦 Project Structure
@@ -302,7 +302,7 @@ npm install && npm run dev     # Port 3005
 ```bash
 # Core configuration
 NODE_ENV=development
-PORT=8080
+PORT=3000
 MONGODB_URI=mongodb://localhost:27017
 MONGODB_DB_NAME=nanda_development
 
@@ -379,7 +379,7 @@ cd nanda-payments/agents/ts-facilitator
 cp .env.example .env  # Configure your environment
 docker-compose up -d
 
-# Facilitator available at http://localhost:8080
+# Facilitator available at http://localhost:3000
 ```
 
 ### Kubernetes

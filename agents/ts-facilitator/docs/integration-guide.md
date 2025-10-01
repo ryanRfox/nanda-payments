@@ -361,7 +361,7 @@ return c.json({
     cost: 500,                    // Cost in minor units
     description: 'Service description',
     currency: 'NP',
-    facilitatorUrl: 'http://localhost:8080',
+    facilitatorUrl: 'http://localhost:3000',
     scheme: 'exact',
     network: 'nanda-network'
   }
@@ -671,7 +671,7 @@ class SettlementRetryQueue {
 
 ```bash
 # .env file
-FACILITATOR_URL=http://localhost:8080
+FACILITATOR_URL=http://localhost:3000
 AGENT_NAME=my-service
 LOG_LEVEL=info
 PAYMENT_TIMEOUT=30000
@@ -682,7 +682,7 @@ METRICS_ENABLED=true
 ```typescript
 // config.ts
 export const config = {
-  facilitatorUrl: process.env.FACILITATOR_URL || 'http://localhost:8080',
+  facilitatorUrl: process.env.FACILITATOR_URL || 'http://localhost:3000',
   agentName: process.env.AGENT_NAME || 'default-agent',
   paymentTimeout: parseInt(process.env.PAYMENT_TIMEOUT || '30000'),
   retryAttempts: parseInt(process.env.RETRY_ATTEMPTS || '3'),
@@ -731,8 +731,8 @@ log('Settlement completed', { transactionId });
 Check facilitator health:
 
 ```bash
-curl http://localhost:8080/health
-curl http://localhost:8080/metrics
+curl http://localhost:3000/health
+curl http://localhost:3000/metrics
 ```
 
 This integration guide provides comprehensive coverage of x402 payment integration patterns using the NANDA ecosystem. Refer to the [API Reference](./api-reference.md) for detailed endpoint documentation.

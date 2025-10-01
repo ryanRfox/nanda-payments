@@ -86,7 +86,7 @@ services:
       context: .
       dockerfile: Dockerfile.dev
     ports:
-      - "8080:8080"
+      - "8080:3000"
     depends_on:
       - mongodb
     environment:
@@ -146,7 +146,7 @@ USER facilitator
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "fetch('http://localhost:8080/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
+  CMD node -e "fetch('http://localhost:3000/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
 
 EXPOSE 8080
 
@@ -181,7 +181,7 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "8080:3000"
     depends_on:
       - mongodb
     environment:
@@ -195,7 +195,7 @@ services:
     networks:
       - facilitator-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -465,7 +465,7 @@ spec:
         }
       },
       "healthCheck": {
-        "command": ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"],
+        "command": ["CMD-SHELL", "curl -f http://localhost:3000/health || exit 1"],
         "interval": 30,
         "timeout": 5,
         "retries": 3,
@@ -745,7 +745,7 @@ global:
 scrape_configs:
   - job_name: 'facilitator'
     static_configs:
-      - targets: ['facilitator:8080']
+      - targets: ['facilitator:3000']
     metrics_path: '/metrics'
     scrape_interval: 10s
 ```
@@ -830,7 +830,7 @@ server {
     limit_req zone=api burst=20 nodelay;
 
     location / {
-        proxy_pass http://facilitator:8080;
+        proxy_pass http://facilitator:3000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
