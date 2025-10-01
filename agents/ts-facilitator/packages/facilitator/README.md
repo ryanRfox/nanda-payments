@@ -1,225 +1,231 @@
-# @nanda/facilitator
+# NANDA Facilitator
 
-NANDA TypeScript Facilitator - x402 payment verification and settlement service for the NANDA ecosystem.
+A TypeScript x402 payment facilitator for NANDA Points micropayments using MongoDB.
 
 ## Overview
 
-The NANDA Facilitator is a high-performance service that enables HTTP 402 Payment Required functionality using NANDA Points (NP). It provides secure payment verification, session management, and transaction settlement for micropayment-enabled applications.
+The NANDA Facilitator implements the x402 Payment Required protocol for HTTP micropayments using NANDA Points (NP) using MongoDB as the Ledger. It provides payment verification and settlement services following Coinbase's reference facilitator patterns while maintaining simplicity with MongoDB standalone storage.
 
-## Features
+### Key Features
 
-- ✅ **x402 Protocol Support** - Full HTTP 402 Payment Required implementation
-- ✅ **Real-time Verification** - Instant payment authorization validation
-- ✅ **Session Management** - Temporary payment sessions with expiration handling
-- ✅ **Transaction Settlement** - Atomic balance transfers between wallets
-- ✅ **MongoDB Storage** - Reliable data persistence with proper indexing
-- ✅ **Auto-cleanup** - Automatic expired session cleanup
-- ✅ **Health Monitoring** - Comprehensive health checks and metrics
-- ✅ **REST API** - Complete RESTful API for integration
-- ✅ **Type Safety** - Full TypeScript implementation with Zod validation
-- ✅ **High Performance** - Built with Hono framework for optimal speed
+- **x402 Protocol**: Full HTTP 402 Payment Required implementation
+- **Payment Verification**: `/verify` endpoint for payment authorization
+- **Payment Settlement**: `/settle` endpoint for completing transactions
+- **NANDA Points**: Custom currency with 2 decimal places (1 NP = 100 minor units)
+- **MongoDB Integration**: Standalone MongoDB for wallet and transaction storage
+- **Hono**: Uses Hono framework without additional adapters
+- **Health Monitoring**: Built-in health checks and metrics
 
 ## Quick Start
+
+### Prerequisites
+
+- Node.js 20+
+- MongoDB running on `localhost:27017`
 
 ### Installation
 
 ```bash
-npm install @nanda/facilitator
+npm install
 ```
 
 ### Environment Setup
 
-```bash
-# Required environment variables
-MONGODB_URI=mongodb://localhost:27017
-MONGODB_DB_NAME=nanda_facilitator
-PORT=8080
+Create `.env` file:
 
-# Optional configuration
-SESSION_EXPIRATION_MINUTES=60
-PERIODIC_CLEANUP_MINUTES=30
-LOG_LEVEL=info
+```bash
+HOST=localhost
+PORT=3000
+MONGODB_URI=mongodb://127.0.0.1:27017
+MONGODB_DB_NAME=nanda_points
 ```
 
-### Running the Service
+### Running the Facilitator
 
 ```bash
-# Development mode
+# Development mode with auto-reload
 npm run dev
 
-# Production build and start
+# Build and run production
 npm run build
 npm start
-
-# Using Docker
-docker build -t nanda-facilitator .
-docker run -p 8080:8080 nanda-facilitator
 ```
+
+The facilitator will start on `http://localhost:3000` with these endpoints:
+
+- `POST /verify` - Verify x402 payment
+- `POST /settle` - Settle verified payment
+- `GET /api/v1/stats` - Network statistics
+- `GET /api/v1/agents/:name/balance` - Agent balance
+- `GET /health` - Health check
+
+### Database Setup
+
+The facilitator automatically creates MongoDB collections and indexes on startup. No manual setup required.
 
 ## API Endpoints
 
-### Health & Monitoring
-- `GET /health` - Service health check
-- `GET /ready` - Readiness probe with dependency checks
-- `GET /metrics` - Service metrics and statistics
-
 ### x402 Payment Processing
-- `POST /verify` - Verify payment authorization
-- `POST /settle` - Settle verified payment session
 
-### Data Explorer
-- `GET /api/v1/agents/{name}/balance` - Get agent balance
-- `GET /api/v1/transactions` - List transactions with filtering
-- `GET /api/v1/stats` - Network-wide statistics
+#### POST /verify
+Verifies an x402 payment payload against requirements.
 
-See [API Reference](../../docs/api-reference.md) for complete documentation.
+```bash
+curl -X POST http://localhost:3000/verify \
+  -H "Content-Type: application/json" \
+  -d '{
+    "paymentPayload": {
+      "walletId": "sender-wallet",
+      "agentName": "sender",
+      "toWalletId": "receiver-wallet",
+      "toAgentName": "receiver",
+      "amount": "1.00"
+    },
+    "paymentRequirements": {
+      "scheme": "exact",
+      "cost": 100,
+      "currency": "NP",
+      "resource": "/protected-resource"
+    }
+  }'
+```
+
+Response:
+```json
+{
+  "valid": true,
+  "sessionId": "session_123",
+  "expiresAt": "2024-01-01T12:00:00.000Z"
+}
+```
+
+#### POST /settle
+Settles a verified payment session.
+
+```bash
+curl -X POST http://localhost:3000/settle \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sessionId": "session_123",
+    "paymentPayload": {}
+  }'
+```
+
+Response:
+```json
+{
+  "settled": true,
+  "transactionId": "txn_456",
+  "balance": {
+    "from": 9900,
+    "to": 10100
+  }
+}
+```
+
+### Explorer Endpoints
+
+#### GET /api/v1/agents/:name/balance
+Get agent balance and wallet information.
+
+```bash
+curl http://localhost:3000/api/v1/agents/test-agent/balance
+```
+
+#### GET /api/v1/stats
+Get network-wide statistics.
+
+```bash
+curl http://localhost:3000/api/v1/stats
+```
+
+#### GET /health
+Basic health check.
+
+```bash
+curl http://localhost:3000/health
+```
 
 ## Architecture
 
-### Core Components
+### Core Services
 
+- **PaymentSessionService**: Manages x402 payment verification and settlement
+- **WalletService**: Handles balance queries and transfers
+- **AgentService**: Manages agent registration and wallets
+- **TransactionService**: Records and queries payment history
+- **DatabaseService**: MongoDB connection and operations
+
+### Data Models
+
+#### Wallet
+```typescript
+interface Wallet {
+  walletId: string;        // Unique identifier
+  agent_name: string;      // Associated agent
+  currency: 'NP';
+  scale: 2;               // 2 decimal places
+  balanceMinor: number;   // Balance in minor units (1 NP = 100)
+  createdAt: string;
+  updatedAt: string;
+}
 ```
-┌─────────────────┐
-│   HTTP Layer    │ ← Hono framework with Zod validation
-│   (Routes)      │
-└─────────────────┘
-         │
-┌─────────────────┐
-│   Services      │ ← Business logic and payment processing
-│   Layer         │
-└─────────────────┘
-         │
-┌─────────────────┐
-│   Data Layer    │ ← MongoDB with proper indexing
-│   (Models)      │
-└─────────────────┘
+
+#### Transaction
+```typescript
+interface Transaction {
+  id: string;             // Unique transaction ID
+  amount: number;         // Amount in minor units
+  currency: 'NP';
+  type: 'payment' | 'refund' | 'adjustment';
+  status: 'pending' | 'completed' | 'failed';
+  fromWallet: string;
+  toWallet: string;
+  metadata: {
+    agent_from: string;
+    agent_to: string;
+    session_id?: string;
+  };
+  createdAt: string;
+  completedAt?: string;
+}
 ```
 
-### Service Architecture
-
-- **PaymentSessionService** - Manages payment verification and settlement
-- **WalletService** - Handles balance queries and transfers
-- **AgentService** - Manages agent registration and metadata
-- **TransactionService** - Records and queries payment transactions
-- **DatabaseService** - MongoDB connection and collection management
-
-### Payment Flow
-
-```
-1. Client Request (no payment) → 402 Payment Required
-2. Client obtains payment authorization from wallet
-3. Client Request (with x-payment header) → Verify payment
-4. Service processes request → Return result
-5. Settlement → Complete transaction and update balances
+#### PaymentSession
+```typescript
+interface PaymentSession {
+  sessionId: string;           // Unique session ID
+  resourceServer: string;      // Origin server
+  resource: string;           // Protected resource
+  amount: number;             // Cost in minor units
+  currency: 'NP';
+  fromAgent: string;          // Sender
+  toAgent: string;            // Receiver
+  status: 'verified' | 'settled' | 'expired' | 'failed';
+  expiresAt: string;          // Session expiration
+  createdAt: string;
+}
 ```
 
 ## Configuration
 
-### Database Configuration
+The facilitator loads configuration from environment variables:
 
 ```typescript
-// MongoDB configuration with replica set support
-const config = {
-  mongodb: {
-    uri: process.env.MONGODB_URI || 'mongodb://localhost:27017',
-    dbName: process.env.MONGODB_DB_NAME || 'nanda_facilitator',
-    options: {
-      maxPoolSize: 10,
-      minPoolSize: 2,
-      maxIdleTimeMS: 30000,
-      serverSelectionTimeoutMS: 5000,
-    }
-  }
-};
-```
+// Server settings
+PORT=3000
+HOST=localhost
 
-### Security Configuration
+// Database
+MONGODB_URI=mongodb://127.0.0.1:27017
+MONGODB_DB_NAME=nanda_points
 
-```typescript
-const config = {
-  security: {
-    sessionExpirationMinutes: 60,
-    maxSessionsPerAgent: 100,
-    requireHttps: process.env.NODE_ENV === 'production',
-    corsOrigins: process.env.CORS_ORIGINS?.split(',') || ['*']
-  }
-};
-```
+// Session management
+SESSION_EXPIRATION_MINUTES=60
+PERIODIC_CLEANUP_MINUTES=5
 
-### NANDA Points Configuration
-
-```typescript
-const config = {
-  nandaPoints: {
-    defaultBalanceMinor: 100000, // 1000.00 NP for new agents
-    minTransferAmount: 1,        // 0.01 NP minimum
-    maxTransferAmount: 1000000,  // 10000.00 NP maximum
-    scale: 2                     // 2 decimal places
-  }
-};
-```
-
-## Data Models
-
-### Payment Session
-
-Temporary sessions created during payment verification:
-
-```typescript
-interface PaymentSession {
-  sessionId: string;           // Unique session identifier
-  resourceServer: string;      // Origin server
-  resource: string;           // Resource being accessed
-  amount: number;             // Cost in minor units
-  currency: 'NP';
-  fromAgent: string;          // Sender agent name
-  toAgent: string;            // Receiver agent name
-  status: 'verified' | 'settled' | 'expired' | 'failed';
-  paymentRequirements: object;
-  paymentPayload?: object;
-  expiresAt: string;          // ISO 8601 expiration
-  settledAt?: string;         // Settlement timestamp
-  createdAt: string;          // Creation timestamp
-}
-```
-
-### Transaction
-
-Completed payment records:
-
-```typescript
-interface Transaction {
-  id: string;                 // Unique transaction ID
-  amount: number;             // Amount in minor units
-  currency: 'NP';
-  type: 'payment' | 'refund' | 'adjustment';
-  status: 'pending' | 'completed' | 'failed';
-  createdAt: string;
-  completedAt?: string;
-  metadata: {
-    agent_from: string;
-    agent_to: string;
-    resource?: string;
-    description?: string;
-    sessionId?: string;
-  };
-}
-```
-
-### Wallet
-
-Agent balance storage:
-
-```typescript
-interface Wallet {
-  walletId: string;           // Unique wallet identifier
-  agent_name: string;         // Associated agent
-  currency: 'NP';
-  scale: 2;                   // Decimal places
-  balanceMinor: number;       // Balance in minor units
-  createdAt: string;
-  updatedAt: string;
-}
+// CORS
+CORS_ORIGINS=http://localhost:3000,http://localhost:3001
 ```
 
 ## Development
@@ -229,32 +235,27 @@ interface Wallet {
 ```
 packages/facilitator/
 ├── src/
-│   ├── models/              # Data models and schemas
-│   │   ├── config.ts        # Configuration management
-│   │   ├── agent.ts         # Agent model
-│   │   ├── wallet.ts        # Wallet model and utilities
-│   │   ├── transaction.ts   # Transaction model
-│   │   └── payment-session.ts # Payment session model
+│   ├── models/              # Type definitions
+│   │   ├── config.ts
+│   │   ├── agent.ts
+│   │   ├── wallet.ts
+│   │   ├── transaction.ts
+│   │   └── payment-session.ts
 │   ├── services/            # Business logic
-│   │   ├── database.ts      # MongoDB service
-│   │   ├── agent-service.ts # Agent management
-│   │   ├── wallet-service.ts # Balance and transfers
-│   │   ├── transaction-service.ts # Transaction logging
-│   │   └── payment-session-service.ts # Payment processing
-│   ├── routes/              # HTTP route handlers
-│   │   ├── health.ts        # Health endpoints
+│   │   ├── database.ts
+│   │   ├── agent-service.ts
+│   │   ├── wallet-service.ts
+│   │   ├── transaction-service.ts
+│   │   └── payment-session-service.ts
+│   ├── routes/              # HTTP endpoints
+│   │   ├── health.ts
 │   │   ├── facilitator.ts   # x402 endpoints
-│   │   └── explorer.ts      # Data query endpoints
-│   ├── scripts/             # Utility scripts
-│   │   └── seed.ts          # Database seeding
-│   └── server.ts            # Main server entry point
-├── tests/
-│   ├── unit/               # Unit tests
-│   └── integration/        # Integration tests
-├── dist/                   # Compiled JavaScript
+│   │   └── explorer.ts      # Data endpoints
+│   ├── scripts/
+│   │   └── seed.ts          # Test data seeding
+│   └── server.ts            # Main server
+├── tests/                   # Test files
 ├── package.json
-├── tsconfig.json
-├── vitest.config.ts
 └── README.md
 ```
 
@@ -267,91 +268,63 @@ npm test
 # Run with coverage
 npm run test:coverage
 
-# Run integration tests
-npm test -- tests/integration
+# Type check
+npm run type-check
 
-# Run specific test file
-npm test -- tests/unit/wallet-service.test.ts
+# Lint code
+npm run lint
 ```
 
-### Database Setup
+### Database Seeding
 
-The facilitator automatically creates necessary collections and indexes on startup:
-
-```bash
-# Start MongoDB (if using local instance)
-mongod --dbpath ./data
-
-# The facilitator will create:
-# - agents collection (with unique index on agent_name)
-# - wallets collection (with indexes on walletId and agent_name)
-# - transactions collection (with indexes on agent fields and timestamp)
-# - paymentSessions collection (with TTL index for auto-cleanup)
-```
-
-### Seeding Test Data
+Create test agents with initial balances:
 
 ```bash
-# Create test agents with wallets
 npm run seed
 ```
 
 This creates:
-- `test-sender` agent with 1000.00 NP
-- `test-receiver` agent with 1000.00 NP
-- `test-poor` agent with 0.50 NP
+- `test-sender` with 1000.00 NP
+- `test-receiver` with 1000.00 NP
+- `test-poor` with 0.50 NP
 
-## Monitoring and Operations
+## x402 Protocol Implementation
 
-### Health Monitoring
+The facilitator implements the x402 Payment Required protocol:
 
-```bash
-# Basic health check
-curl http://localhost:8080/health
+1. **Client requests protected resource** without payment
+2. **Server responds with 402** including payment requirements
+3. **Client obtains payment authorization** from wallet
+4. **Client requests resource with X-PAYMENT header**
+5. **Facilitator verifies payment** via `/verify` endpoint
+6. **Server processes request** and returns content
+7. **Payment is settled** via `/settle` endpoint
 
-# Detailed readiness check
-curl http://localhost:8080/ready
+### Supported Headers
 
-# Service metrics
-curl http://localhost:8080/metrics
-```
+- `X-PAYMENT`: Client payment payload (case-insensitive)
+- `X-PAYMENT-RESPONSE`: Server payment requirements (case-insensitive)
 
-### Logging
+### Payment Schemes
 
-The facilitator uses structured logging:
+Currently supports `"exact"` payment scheme:
+- Payment amount must exactly match requirement cost
+- Cost specified in minor units (1 NP = 100 minor units)
 
-```json
-{
-  "timestamp": "2024-01-20T10:30:00.000Z",
-  "level": "info",
-  "message": "Payment session created",
-  "sessionId": "session_1234567890_abc123",
-  "amount": 500,
-  "fromAgent": "sender-agent",
-  "toAgent": "receiver-agent"
-}
-```
+## NANDA Points Currency
 
-### Periodic Cleanup
+NANDA Points (NP) is the native currency:
 
-Expired sessions are automatically cleaned up:
-- Default: every 30 minutes
-- Configurable via `PERIODIC_CLEANUP_MINUTES`
-- Manual cleanup: `POST /admin/cleanup` (if enabled)
+- **Symbol**: NP
+- **Scale**: 2 decimal places
+- **Minor Units**: 1 NP = 100 minor units
+- **Example**: 1.50 NP = 150 minor units
 
-### Performance Metrics
+All internal calculations use minor units for precision.
 
-Key metrics tracked:
-- Payment verification rate
-- Settlement success rate
-- Average session duration
-- Database query performance
-- Active sessions count
-- Total transaction volume
+## Deployment
 
-## Production Deployment
-
-### Docker Deployment
+### Docker
 
 ```dockerfile
 FROM node:20-alpine
@@ -359,93 +332,87 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --only=production
 COPY dist/ ./dist/
-EXPOSE 8080
+EXPOSE 3000
 CMD ["node", "dist/server.js"]
 ```
 
-### Environment Configuration
+### Production Environment
 
 ```bash
-# Production environment variables
 NODE_ENV=production
-PORT=8080
-MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/nanda
+PORT=3000
+MONGODB_URI=mongodb://production-host:27017
 MONGODB_DB_NAME=nanda_production
-
-# Security
-CORS_ORIGINS=https://app.example.com,https://api.example.com
-SESSION_EXPIRATION_MINUTES=30
 REQUIRE_HTTPS=true
-
-# Monitoring
-LOG_LEVEL=warn
-METRICS_ENABLED=true
-HEALTH_CHECK_TIMEOUT=5000
+CORS_ORIGINS=https://app.example.com
 ```
 
-### Scaling Considerations
+## Integration
 
-- **Horizontal scaling**: Multiple facilitator instances behind load balancer
-- **Database scaling**: MongoDB replica sets for high availability
-- **Session management**: Consider Redis for distributed session storage
-- **Caching**: Implement Redis caching for frequently accessed data
-
-### Security Checklist
-
-- [ ] MongoDB authentication enabled
-- [ ] Network security groups configured
-- [ ] HTTPS enforced in production
-- [ ] CORS origins restricted
-- [ ] Request rate limiting implemented
-- [ ] Input validation on all endpoints
-- [ ] Structured logging without sensitive data
-- [ ] Regular security updates
-
-## SDK Integration
-
-Use with the official NANDA SDK:
+### Using with NANDA SDK
 
 ```typescript
 import { NandaClient } from '@nanda/sdk';
 
 const client = new NandaClient({
-  facilitatorUrl: 'http://localhost:8080'
+  facilitatorUrl: 'http://localhost:3000'
 });
 
-// Basic usage
-const balance = await client.getAgentBalance('my-agent');
-const verification = await client.verifyPayment(paymentData);
-const settlement = await client.settlePayment(settlementData);
+// Check health
+const health = await client.health();
+
+// Verify payment
+const verification = await client.verifyPayment({
+  paymentPayload: { /* payment data */ },
+  paymentRequirements: { /* requirements */ }
+});
+
+// Settle payment
+if (verification.valid) {
+  const settlement = await client.settlePayment({
+    sessionId: verification.sessionId,
+    paymentPayload: {}
+  });
+}
 ```
 
-## Contributing
+## Design Decisions
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes with tests
-4. Run the full test suite
-5. Submit a pull request
+### MongoDB Standalone
+- Uses standalone MongoDB (no replica sets)
+- Simplified transaction handling for development
+- Auto-created indexes for performance
 
-### Code Style
+### Pure Hono Framework
+- No additional adapters or middleware
+- Uses Node.js native HTTP server
+- Minimal dependencies for reliability
 
-```bash
-# Lint code
-npm run lint
+### Coinbase Pattern Alignment
+- Simple verify/settle functions
+- Stateless payment verification
+- Clear separation of concerns
 
-# Format code
-npm run format
+## Monitoring
 
-# Type check
-npm run type-check
+### Health Checks
+- `GET /health` - Basic service health
+- Database connectivity validation
+- Automatic session cleanup every 5 minutes
+
+### Logging
+Structured JSON logs for all operations:
+```json
+{
+  "timestamp": "2024-01-01T12:00:00.000Z",
+  "level": "info",
+  "message": "Payment verified",
+  "sessionId": "session_123",
+  "amount": 100,
+  "fromAgent": "sender"
+}
 ```
 
 ## License
 
-MIT - See [LICENSE](../../LICENSE) for details.
-
-## Support
-
-- [API Reference](../../docs/api-reference.md)
-- [Integration Guide](../../docs/integration-guide.md)
-- [Examples](../../examples/)
-- [GitHub Issues](https://github.com/nanda/ts-facilitator/issues)
+MIT

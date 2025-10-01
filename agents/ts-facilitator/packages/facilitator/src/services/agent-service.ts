@@ -42,12 +42,15 @@ export class AgentService {
       await this.db.collections.agents.insertOne(agent);
 
       // Create associated wallet with the same walletId as the agent
+      // Set consistent balance for all agents
+      let customBalance = 10000; // 100.0 NP in minor units for all agents
+
       await this.walletService.createWallet({
         walletId: agent.walletId, // Use the same UUID as the agent
         agent_name: agent.agent_name,
         currency: 'NP',
         scale: 2,
-        balanceMinor: this.config.nandaPoints.defaultBalanceMinor,
+        balanceMinor: customBalance,
       });
 
       return agent;

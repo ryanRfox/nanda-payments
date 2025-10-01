@@ -56,6 +56,15 @@ export class NandaPoints {
   }
 
   /**
+   * Create minor units from NP amount (alias for toMinor for clarity)
+   * This matches Coinbase pattern naming
+   * Example: NandaPoints.fromNP(10.50) -> 1050 minor units
+   */
+  static fromNP(np: number): number {
+    return NandaPoints.toMinor(np);
+  }
+
+  /**
    * Convert minor units to NP (major units)
    * Example: 1050 minor units -> 10.50 NP
    */

@@ -8,15 +8,15 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "pnpm -r build",
-    "dev": "pnpm --filter @nanda/facilitator dev",
-    "test": "pnpm -r test",
-    "test:coverage": "pnpm -r test:coverage",
-    "type-check": "pnpm -r type-check",
-    "lint": "pnpm -r lint",
-    "format": "pnpm -r format",
-    "clean": "pnpm -r clean && rm -rf node_modules",
-    "install-deps": "pnpm install --frozen-lockfile"
+    "build": "npm run build --workspaces",
+    "dev": "cd packages/facilitator && npm run dev",
+    "test": "npm run test --workspaces",
+    "test:coverage": "npm run test:coverage --workspaces",
+    "type-check": "npm run type-check --workspaces",
+    "lint": "npm run lint --workspaces",
+    "format": "npm run format --workspaces",
+    "clean": "npm run clean --workspaces && rm -rf node_modules",
+    "install-deps": "npm install"
   },
   "keywords": [
     "x402",
@@ -37,6 +37,6 @@
   },
   "engines": {
     "node": ">=20.0.0",
-    "pnpm": ">=8.0.0"
+    "npm": ">=8.0.0"
   }
 }

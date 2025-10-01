@@ -13,6 +13,14 @@ import {
 } from '../models/payment-session.js';
 import type { Config } from '../models/config.js';
 import { NandaPoints } from '../models/wallet.js';
+import {
+  NandaX402Utils,
+  NandaVerifyRequestSchema,
+  NandaSettleRequestSchema,
+  type NandaPaymentPayload,
+  type NandaPaymentRequirements,
+  NANDA_NETWORK,
+} from '../models/x402-nanda.js';
 
 /**
  * Payment Session Service
@@ -21,7 +29,6 @@ import { NandaPoints } from '../models/wallet.js';
  * Handles session lifecycle, expiration, and state transitions.
  */
 export class PaymentSessionService {
-  private cleanupInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private db: DatabaseService,
@@ -29,18 +36,26 @@ export class PaymentSessionService {
     private transactionService: TransactionService,
     private config: Config
   ) {
-    // Start automatic cleanup of expired sessions
-    this.startPeriodicCleanup();
+    // No automatic cleanup - keep it simple like Coinbase pattern
   }
 
   /**
-   * Extract payment details from x402 payload (handles different formats)
+   * Extract payment details from x402 payload (handles x402 standard and legacy formats)
    */
   private extractPaymentDetails(paymentPayload: unknown, paymentRequirements: unknown): {
     fromWalletId: string;
     toWalletId: string;
-    amount: string;
+    amount: string | number;
+    isX402Compliant: boolean;
   } {
+    // Try x402-compliant NANDA format first
+    if (NandaX402Utils.isNandaPayload(paymentPayload)) {
+      const nandaPayload = paymentPayload as NandaPaymentPayload;
+      const { fromWalletId, toWalletId, amount } = NandaX402Utils.extractWalletIds(nandaPayload);
+      return { fromWalletId, toWalletId, amount, isX402Compliant: true };
+    }
+
+    // Fall back to legacy formats for backward compatibility
     let fromWalletId = '';
     let toWalletId = '';
     let amount = '';
@@ -64,7 +79,7 @@ export class PaymentSessionService {
         amount = String(innerPayload.value || innerPayload.amount || '');
       }
     } else {
-      // Direct payload (custom NANDA format)
+      // Direct payload (legacy NANDA format)
       fromWalletId = String(payload.from || '');
       toWalletId = String(payload.to || '');
       amount = String(payload.amount || '');
@@ -75,10 +90,10 @@ export class PaymentSessionService {
       amount = String(requirements.maxAmountRequired || requirements.amount || '');
     }
     if (!toWalletId) {
-      toWalletId = String(requirements.recipientAddress || requirements.recipient || '');
+      toWalletId = String(requirements.recipientAddress || requirements.recipient || requirements.payTo || '');
     }
 
-    return { fromWalletId, toWalletId, amount };
+    return { fromWalletId, toWalletId, amount, isX402Compliant: false };
   }
 
   /**
@@ -150,7 +165,22 @@ export class PaymentSessionService {
     try {
       const { paymentPayload, paymentRequirements } = request;
 
-      // Step 1: Basic x402 payload validation
+      // Step 1: Try x402-compliant validation first
+      try {
+        const x402Request = NandaVerifyRequestSchema.parse({
+          paymentPayload,
+          paymentRequirements,
+        });
+
+        // If we reach here, it's a valid x402-compliant request
+        return await this.processX402VerifyRequest(x402Request);
+
+      } catch (x402Error) {
+        // If x402 validation fails, try legacy format for backward compatibility
+        console.log('x402 validation failed, trying legacy format:', x402Error);
+      }
+
+      // Step 2: Legacy format validation
       if (!paymentPayload || !paymentRequirements) {
         return {
           valid: false,
@@ -165,11 +195,11 @@ export class PaymentSessionService {
         };
       }
 
-      // Step 2: Extract payment information from payload
-      const { fromWalletId, toWalletId, amount: amountString } = this.extractPaymentDetails(paymentPayload, paymentRequirements);
+      // Step 3: Extract payment information from legacy payload
+      const { fromWalletId, toWalletId, amount: payloadAmount, isX402Compliant } = this.extractPaymentDetails(paymentPayload, paymentRequirements);
       const resource = paymentRequirements.resource || 'unknown';
 
-      if (!fromWalletId || !toWalletId || !amountString) {
+      if (!fromWalletId || !toWalletId || (payloadAmount === null || payloadAmount === undefined || payloadAmount === '')) {
         return {
           valid: false,
           reason: 'Missing required payment details: from, to, or amount',
@@ -179,9 +209,14 @@ export class PaymentSessionService {
       // Convert amount to NANDA Points minor units
       let amountMinor: number;
       try {
-        // Assuming amount is in NP format like "10.50" or "0.001"
-        const npAmount = parseFloat(amountString.replace('$', ''));
-        amountMinor = NandaPoints.toMinor(npAmount);
+        if (typeof payloadAmount === 'number') {
+          // Already in minor units from x402 format
+          amountMinor = payloadAmount;
+        } else {
+          // Legacy string format - assume NP format like "10.50" or "0.001"
+          const npAmount = parseFloat(String(payloadAmount).replace('$', ''));
+          amountMinor = NandaPoints.toMinor(npAmount);
+        }
       } catch {
         return {
           valid: false,
@@ -241,6 +276,90 @@ export class PaymentSessionService {
         reason: error instanceof Error ? error.message : 'Verification failed',
       };
     }
+  }
+
+  /**
+   * Process x402-compliant verify request (NANDA Points format)
+   */
+  private async processX402VerifyRequest(request: {
+    paymentPayload: NandaPaymentPayload;
+    paymentRequirements: NandaPaymentRequirements;
+  }): Promise<VerifyResponse> {
+    const { paymentPayload, paymentRequirements } = request;
+
+    // Extract wallet IDs from x402 payload (amount is already in minor units)
+    const { fromWalletId, toWalletId, amount: amountMinor } = NandaX402Utils.extractWalletIds(paymentPayload);
+
+    // Validate that payTo matches the destination wallet
+    if (paymentRequirements.payTo !== toWalletId) {
+      return {
+        valid: false,
+        reason: 'Payment requirements payTo field does not match payload destination',
+      };
+    }
+
+    // Validate amount matches maxAmountRequired (both are uInt minor units)
+    if (amountMinor !== paymentRequirements.maxAmountRequired) {
+      return {
+        valid: false,
+        reason: `Payment amount does not match required amount. Provided: ${amountMinor} (${NandaX402Utils.formatAmount(amountMinor)}), Required: ${paymentRequirements.maxAmountRequired} (${NandaX402Utils.formatAmount(paymentRequirements.maxAmountRequired)})`,
+      };
+    }
+
+    // Amount validation: ensure non-negative integer (uInt validation)
+    if (!Number.isInteger(amountMinor) || amountMinor < 0) {
+      return {
+        valid: false,
+        reason: 'Payment amount must be a non-negative integer in minor units',
+      };
+    }
+
+    // Find wallets by UUID
+    const [fromWallet, toWallet] = await Promise.all([
+      this.db.collections.wallets.findOne({ walletId: fromWalletId }),
+      this.db.collections.wallets.findOne({ walletId: toWalletId }),
+    ]);
+
+    if (!fromWallet || !toWallet) {
+      return {
+        valid: false,
+        reason: 'Source or destination wallet not found in NANDA network',
+      };
+    }
+
+    // Verify sufficient balance
+    const balance = await this.walletService.getBalance(fromWallet.walletId);
+    if (!balance || balance.balanceMinor < amountMinor) {
+      return {
+        valid: false,
+        reason: `Insufficient balance. Required: ${NandaPoints.format(amountMinor)}, Available: ${balance ? NandaPoints.format(balance.balanceMinor) : '0.00 NP'}`,
+      };
+    }
+
+    // Create payment session
+    const now = new Date();
+    const expiresAt = new Date(
+      now.getTime() + (paymentRequirements.maxTimeoutSeconds || this.config.security.sessionExpirationMinutes * 60) * 1000
+    );
+
+    const session = await this.createSession({
+      resourceServer: toWallet.agent_name,
+      resource: paymentRequirements.resource,
+      amount: amountMinor,
+      currency: 'NP',
+      fromAgent: fromWallet.agent_name,
+      toAgent: toWallet.agent_name,
+      status: 'verified',
+      paymentRequirements,
+      paymentPayload,
+      expiresAt: expiresAt.toISOString(),
+    });
+
+    return {
+      valid: true,
+      sessionId: session.sessionId,
+      expiresAt: session.expiresAt,
+    };
   }
 
   /**
@@ -364,64 +483,9 @@ export class PaymentSessionService {
     }
   }
 
-  /**
-   * Start periodic cleanup of expired sessions
-   */
-  private startPeriodicCleanup(): void {
-    // Clean up expired sessions every 5 minutes
-    const intervalMs = 5 * 60 * 1000;
-
-    this.cleanupInterval = setInterval(async () => {
-      try {
-        const cleaned = await this.cleanupExpiredSessions();
-        if (cleaned > 0) {
-          console.log(`🧹 Auto-cleaned ${cleaned} expired payment sessions`);
-        }
-      } catch (error) {
-        console.error('❌ Error during automatic session cleanup:', error);
-      }
-    }, intervalMs);
-
-    console.log('⏰ Started automatic payment session cleanup (every 5 minutes)');
-  }
-
-  /**
-   * Stop periodic cleanup
-   */
-  public stopPeriodicCleanup(): void {
-    if (this.cleanupInterval) {
-      clearInterval(this.cleanupInterval);
-      this.cleanupInterval = null;
-      console.log('🛑 Stopped automatic payment session cleanup');
-    }
-  }
-
-  /**
-   * Clean up expired sessions
-   */
-  async cleanupExpiredSessions(): Promise<number> {
-    const now = new Date().toISOString();
-
-    // First, mark expired sessions that aren't already marked
-    await this.db.collections.paymentSessions.updateMany(
-      {
-        expiresAt: { $lt: now },
-        status: { $in: ['pending', 'verified'] }
-      },
-      {
-        $set: { status: 'expired' }
-      }
-    );
-
-    // Then delete old expired sessions (older than 24 hours)
-    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const result = await this.db.collections.paymentSessions.deleteMany({
-      expiresAt: { $lt: oneDayAgo },
-      status: 'expired'
-    });
-
-    return result.deletedCount || 0;
-  }
+  // Reference implementation: Coinbase x402 facilitators are stateless
+  // Sessions expire naturally through database TTL or client-side handling
+  // No periodic cleanup needed - keeps implementation simple
 
   /**
    * Get session statistics

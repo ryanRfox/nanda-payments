@@ -46,11 +46,109 @@ All facilitators expose two primary endpoints:
 
 ### Payment Flow
 1. Client requests resource from server
-2. Server responds with 402 Payment Required + payment instructions
-3. Client constructs and sends payment payload via X-PAYMENT header
+2. Server responds with 402 Payment Required + payment requirements via `X-PAYMENT-RESPONSE` header
+3. Client constructs and sends payment payload via `X-PAYMENT` header
 4. Server verifies payment via facilitator `/verify` endpoint
 5. If valid, facilitator settles payment via `/settle` endpoint
 6. Server returns requested resource
+
+### x402 HTTP Headers
+- **`X-PAYMENT`**: Client sends payment payload to server
+- **`X-PAYMENT-RESPONSE`**: Server sends payment requirements (with 402 status)
+- **Case Variations**: Protocol supports both `X-Payment` and `X-PAYMENT` formats
+
+**Official Specification Analysis (September 2025):**
+- The official x402 specification defines detailed X-PAYMENT header structure
+- Headers use base64-encoded JSON format with strict schema requirements
+- Includes cryptographic signatures and time-bounded authorization
+- Supports multiple blockchain networks with standardized payload formats
+
+### X-PAYMENT Header Specification
+
+**Based on official specification**: https://github.com/coinbase/x402/blob/main/specs/x402-specification.md
+
+#### Header Format
+
+X-PAYMENT headers contain **base64-encoded JSON** with the following structure:
+
+```typescript
+interface X402PaymentHeader {
+  x402Version: 1;                    // Protocol version
+  scheme: 'exact';                   // Payment scheme
+  network: string;                   // Blockchain network ID
+  payload: {
+    signature: string;               // Cryptographic signature (0x...)
+    authorization: {
+      from: string;                  // Payer address (0x...)
+      to: string;                    // Payee address (0x...)
+      value: string;                 // Payment amount in wei/minor units
+      validAfter: string;            // Unix timestamp - authorization valid after
+      validBefore: string;           // Unix timestamp - authorization expires
+      nonce: string;                 // Unique nonce to prevent replay attacks (0x...)
+    }
+  }
+}
+```
+
+#### Example X-PAYMENT Header (Blockchain):
+
+```typescript
+// JSON payload (before base64 encoding)
+const paymentHeader = {
+  "x402Version": 1,
+  "scheme": "exact",
+  "network": "base-sepolia",
+  "payload": {
+    "signature": "0x1234567890abcdef...",
+    "authorization": {
+      "from": "0xABCDEF1234567890...",
+      "to": "0x9876543210FEDCBA...",
+      "value": "10000",              // 0.01 USDC (6 decimals)
+      "validAfter": "1740672089",    // Unix timestamp
+      "validBefore": "1740672154",   // Valid for ~1 minute
+      "nonce": "0xdeadbeef..."
+    }
+  }
+}
+
+// Actual HTTP header would be:
+// X-PAYMENT: base64(JSON.stringify(paymentHeader))
+```
+
+#### Security Features
+
+1. **Cryptographic Signatures**: Uses EIP-3009 transfer authorization
+2. **Time-bounded Authorization**: `validAfter` and `validBefore` prevent stale payments
+3. **Replay Protection**: Unique `nonce` prevents double-spending
+4. **Chain-specific**: Network field prevents cross-chain replay attacks
+
+#### NANDA Points Adaptation
+
+For NANDA Points (non-blockchain), the structure adapts:
+
+```typescript
+// NANDA Points X-PAYMENT header
+const nandaPaymentHeader = {
+  "x402Version": 1,
+  "scheme": "exact",
+  "network": "nanda-points",
+  "payload": {
+    from: "uuid-wallet-id",          // NANDA wallet UUID
+    to: "uuid-wallet-id",            // NANDA wallet UUID
+    amount: "1.00",                  // Decimal string (NP format)
+    sessionId: "uuid",               // Payment session identifier
+    timestamp: "2024-01-01T12:00:00Z" // ISO timestamp
+  }
+}
+```
+
+#### Implementation Notes
+
+- **Base64 Encoding**: Always encode the JSON as base64 for HTTP transmission
+- **Content-Type**: Headers should specify `application/json` for decoded payload
+- **Size Limits**: Keep payloads under 8KB to avoid HTTP header size limits
+- **Validation**: Always validate signature/session before processing payments
+- **Error Handling**: Invalid headers should return 400 Bad Request, not 402
 
 ## TypeScript Components Inventory
 
@@ -320,6 +418,7 @@ Response:
 
 ### Documentation Sites
 - **Official Docs**: https://docs.cdp.coinbase.com/x402/
+- **Protocol Specification**: https://github.com/coinbase/x402/blob/main/specs/x402-specification.md
 - **Protocol Whitepaper**: https://www.x402.org/x402-whitepaper.pdf
 - **GitBook Documentation**: https://x402.gitbook.io/x402
 - **Cloudflare Integration**: https://developers.cloudflare.com/agents/x402/
@@ -646,9 +745,88 @@ app.use(nandaFacilitator({
 4. **Audit Trails**: Log all payment transactions
 5. **Key Management**: Secure private key storage (future blockchain use)
 
+## NEW: Coinbase x402 Facilitator Reference Implementation
+
+### Official Reference Implementation
+- **Source**: https://github.com/coinbase/x402/blob/main/typescript/packages/x402/src/facilitator/facilitator.ts
+- **Purpose**: Production-ready facilitator implementation for multiple blockchains
+- **Pattern**: Polymorphic, extensible design
+
+### Key Architecture Patterns
+
+**Generic Facilitator Functions:**
+```typescript
+export function verify<T extends Transport, C extends Chain, A extends Account>(
+  client: Client<T, C, A>,
+  paymentPayload: PaymentPayload,
+  paymentRequirements: PaymentRequirements,
+  supported: Supported
+): Promise<VerifyResult>
+
+export function settle<T extends Transport, C extends Chain, A extends Account>(
+  client: Client<T, C, A>,
+  paymentPayload: PaymentPayload,
+  supported: Supported
+): Promise<SettleResult>
+```
+
+**Scheme-Based Routing:**
+```typescript
+if (paymentRequirements.scheme === "exact") {
+  if (SupportedEVMNetworks.includes(paymentRequirements.network)) {
+    return verifyExactEvm(client, paymentPayload, paymentRequirements);
+  }
+  if (SupportedSVMNetworks.includes(paymentRequirements.network)) {
+    return verifyExactSvm(client, paymentPayload, paymentRequirements);
+  }
+}
+```
+
+**Multi-Network Support:**
+- **EVM Networks**: Ethereum, Base, Polygon, etc.
+- **SVM Networks**: Solana
+- **Extensible**: New networks can be added via configuration
+
+### How Our NANDA Implementation Compares
+
+**Similarities:**
+- ✅ Simple `/verify` and `/settle` endpoints
+- ✅ Structured response objects with validation
+- ✅ "exact" scheme support only
+- ✅ TypeScript implementation
+
+**Differences:**
+- **Storage**: Coinbase uses blockchain, we use MongoDB
+- **Networks**: Coinbase supports multiple chains, we support "nanda-network"
+- **Complexity**: Coinbase is generic/polymorphic, we are purpose-built
+- **Scope**: Coinbase targets universal payments, we target NANDA Points
+
+### When to Adopt Coinbase Patterns
+
+**Not Now Because:**
+- Our MongoDB approach is simpler and working
+- We don't need multi-chain support yet
+- NANDA Points doesn't require blockchain complexity
+- Current implementation has 100% test coverage
+
+**Future Migration Path:**
+1. **Phase 1**: Keep current MongoDB implementation
+2. **Phase 2**: When blockchain needed, build new facilitator using Coinbase patterns
+3. **Phase 3**: Support both MongoDB and blockchain in parallel
+4. **Phase 4**: Deprecate MongoDB version if needed
+
+### Key Takeaways
+
+The Coinbase reference validates our architectural decisions:
+- Simple verify/settle pattern is correct ✅
+- "exact" scheme focus is appropriate ✅
+- TypeScript + structured responses align ✅
+
+The main difference is complexity level - theirs is designed for production blockchain use across multiple networks, ours is designed for NANDA Points MVP with MongoDB. Both are valid approaches for their respective use cases.
+
 ---
 
 *Research compiled: September 2025*
 *Protocol Version: x402 v0.6.1*
 *Status: Production Ready*
-*Updates: Added Hono integration, MCP findings, NANDA architecture*
+*Updates: Added Hono integration, MCP findings, NANDA architecture, Coinbase reference analysis*

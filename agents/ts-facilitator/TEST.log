@@ -1,98 +1,193 @@
-=== NANDA TypeScript Facilitator Testing ===
-Date: Wed Sep 24 22:14:25 EDT 2025
-Facilitator: http://localhost:3000
-Expert Agent: http://localhost:3001
-API Service: http://localhost:3003
+🧪 Testing NANDA Facilitator - uInt Minor Units Payment System
+================================================================
+Test Date: Wed Oct  1 15:26:29 EDT 2025
 
-=== 1. FACILITATOR HEALTH CHECKS ===
+📋 Configuration:
+  Facilitator: http://localhost:3000
+  From Wallet: 8672e85c-3dba-4d84-8821-19c0ab229308 (test-agent)
+  To Wallet: ac29a924-b17c-44b7-b94f-9d14db21e1b1 (weather-agent)
 
-Facilitator Health Response:
+1️⃣ Health Check
+  GET http://localhost:3000/health
 {
   "status": "healthy",
-  "server": "test-expert-agent",
-  "port": 3001,
-  "timestamp": "2025-09-25T02:14:58.574Z",
-  "facilitator": "http://localhost:3000"
-}
-=== 2. EXPERT AGENT SERVICE INFORMATION ===
-{
-  "name": "Test Expert Agent",
+  "timestamp": "2025-10-01T19:26:29.049Z",
+  "service": "nanda-facilitator",
   "version": "1.0.0",
-  "description": "Simple expert agent for testing x402 payments",
-  "endpoints": {
-    "free": [
-      "GET /health - Health check",
-      "GET /info - Service information"
-    ],
-    "paid": [
-      "POST /search - AI search service (5.00 NP)",
-      "POST /analyze - Text analysis service (10.00 NP)"
+  "database": {
+    "status": "healthy",
+    "database": "nanda_points"
+  }
+}
+
+2️⃣ Network Statistics
+  GET http://localhost:3000/api/v1/stats
+{
+  "wallets": {
+    "totalWallets": 4,
+    "activeWallets": 4,
+    "totalBalance": 400,
+    "totalBalanceFormatted": "400.00 NP",
+    "averageBalance": 100
+  },
+  "agents": {
+    "totalAgents": 4,
+    "activeAgents": 4,
+    "averageServiceCharge": 10,
+    "topAgentsByServiceCharge": [
+      {
+        "agent_name": "summary-agent",
+        "serviceCharge": 25
+      },
+      {
+        "agent_name": "search-agent",
+        "serviceCharge": 10
+      },
+      {
+        "agent_name": "weather-agent",
+        "serviceCharge": 3
+      },
+      {
+        "agent_name": "test-agent",
+        "serviceCharge": 1
+      }
     ]
   },
-  "facilitator": "http://localhost:3000",
-  "pricing": {
-    "search": "5.00 NP",
-    "analyze": "10.00 NP"
-  }
+  "transactions": {
+    "totalTransactions": 0,
+    "totalVolume": 0,
+    "totalVolumeFormatted": "0.00 NP",
+    "pendingTransactions": 0,
+    "completedTransactions": 0,
+    "failedTransactions": 0,
+    "averageTransactionValue": 0
+  },
+  "timestamp": "2025-10-01T19:26:29.068Z"
 }
-=== 3. TEST PAYMENT REQUIRED (402) RESPONSES ===
-Testing /search endpoint without payment:
+
+3️⃣ Initial Balances
+  From (test-agent):
 {
-  "error": "Payment Required",
-  "x402": {
-    "cost": 500,
-    "description": "AI search service",
-    "currency": "NP",
-    "facilitatorUrl": "http://localhost:3000",
+  "agent_name": "test-agent",
+  "balance": 100,
+  "balanceMinor": 10000,
+  "balanceFormatted": "100.00 NP",
+  "currency": "NP",
+  "lastUpdated": "2025-10-01T19:26:29.086Z"
+}
+  To (weather-agent):
+{
+  "agent_name": "weather-agent",
+  "balance": 100,
+  "balanceMinor": 10000,
+  "balanceFormatted": "100.00 NP",
+  "currency": "NP",
+  "lastUpdated": "2025-10-01T19:26:29.099Z"
+}
+
+4️⃣ Verify Payment (uInt: 500 minor units = 5.00 NP)
+  POST http://localhost:3000/verify
+Request payload:
+{
+  "paymentPayload": {
+    "x402Version": 1,
     "scheme": "exact",
-    "network": "nanda-network",
-    "resource": "/search"
-  }
-}
-Testing /analyze endpoint without payment:
-{
-  "error": "Payment Required",
-  "x402": {
-    "cost": 1000,
-    "description": "Text analysis service",
-    "currency": "NP",
-    "facilitatorUrl": "http://localhost:3000",
+    "network": "nanda-points",
+    "payload": {
+      "from": "8672e85c-3dba-4d84-8821-19c0ab229308",
+      "to": "ac29a924-b17c-44b7-b94f-9d14db21e1b1",
+      "amount": 500
+    }
+  },
+  "paymentRequirements": {
     "scheme": "exact",
-    "network": "nanda-network",
-    "resource": "/analyze"
+    "network": "nanda-points",
+    "payTo": "ac29a924-b17c-44b7-b94f-9d14db21e1b1",
+    "maxAmountRequired": 500,
+    "resource": "http://localhost:3000/test/uint-payment",
+    "description": "Test uInt payment verification",
+    "mimeType": "application/json",
+    "maxTimeoutSeconds": 300,
+    "asset": "NP"
   }
 }
-=== 4. API SERVICE TESTING ===
-API Service: Connection timeout (may not be fully started)
-
-=== 5. FREE ENDPOINT TESTING ===
-Testing Expert Agent free summarize tool:
+Response:
 {
-  "error": "Not Found",
-  "message": "Endpoint not found",
-  "availableEndpoints": [
-    "GET /health",
-    "GET /info",
-    "POST /search (requires payment)",
-    "POST /analyze (requires payment)"
-  ]
+  "valid": true,
+  "sessionId": "7949be6d-404e-4e6d-929f-8ebc75e4d86f",
+  "expiresAt": "2025-10-01T19:56:29.122Z"
 }
-=== 6. FACILITATOR TESTING ===
-Testing facilitator readiness (MongoDB may have connection issues):
-Note: Facilitator shows MongoDB connection timeouts in logs
+✅ Session ID: 7949be6d-404e-4e6d-929f-8ebc75e4d86f
 
-=== 7. TESTING SUMMARY ===
-✅ Expert Agent running on port 3001
-✅ x402 payment system working correctly (returns 402 Payment Required)
-✅ Payment metadata includes correct facilitator URLs and costs
-✅ Search endpoint: 5.00 NP (500 minor units)
-✅ Analyze endpoint: 10.00 NP (1000 minor units)
-⚠️  Facilitator: MongoDB connection issues preventing full testing
-⚠️  API Service: Connection timeouts during testing
+5️⃣ Settle Payment
+  POST http://localhost:3000/settle
+Request payload:
+{
+  "sessionId": "7949be6d-404e-4e6d-929f-8ebc75e4d86f",
+  "paymentPayload": {
+    "x402Version": 1,
+    "scheme": "exact",
+    "network": "nanda-points",
+    "payload": {
+      "from": "8672e85c-3dba-4d84-8821-19c0ab229308",
+      "to": "ac29a924-b17c-44b7-b94f-9d14db21e1b1",
+      "amount": 500
+    }
+  }
+}
+Response:
+{
+  "settled": true,
+  "transactionId": "50955548-a646-4784-bd8e-0594a793d13f",
+  "balance": {
+    "from": 9500,
+    "to": 10500
+  }
+}
 
-=== ARCHITECTURE VERIFICATION ===
-✅ x402 Protocol: Proper 402 responses with payment metadata
-✅ NANDA Points: Correct currency and cost calculations
-✅ Facilitator URLs: Expert agent points to http://localhost:3000
-✅ Network: Using 'nanda-network' identifier
-✅ TypeScript: Zero compilation errors in all examples
+6️⃣ Final Balances (After Payment)
+  From (test-agent):
+{
+  "agent_name": "test-agent",
+  "balance": 95,
+  "balanceMinor": 9500,
+  "balanceFormatted": "95.00 NP",
+  "currency": "NP",
+  "lastUpdated": "2025-10-01T19:26:29.177Z"
+}
+  To (weather-agent):
+{
+  "agent_name": "weather-agent",
+  "balance": 105,
+  "balanceMinor": 10500,
+  "balanceFormatted": "105.00 NP",
+  "currency": "NP",
+  "lastUpdated": "2025-10-01T19:26:29.196Z"
+}
+
+7️⃣ Balance Verification
+  test-agent: 10000 → 9500 (change: -500)
+  weather-agent: 10000 → 10500 (change: 500)
+
+8️⃣ Testing Additional uInt Amounts
+  Testing amount: 1 minor units (.01 NP)
+    ✅ Verification passed for 1 minor units
+  Testing amount: 10 minor units (.10 NP)
+    ✅ Verification passed for 10 minor units
+  Testing amount: 100 minor units (1.00 NP)
+    ✅ Verification passed for 100 minor units
+  Testing amount: 1000 minor units (10.00 NP)
+    ✅ Verification passed for 1000 minor units
+  Testing amount: 12345 minor units (123.45 NP)
+    ❌ Verification failed: Insufficient balance. Required: 123.45 NP, Available: 95.00 NP
+
+════════════════════════════════════════════════════════════════
+✅ TEST SUMMARY
+════════════════════════════════════════════════════════════════
+✅ Payment flow SUCCESSFUL
+   • Correct amount transferred: 500 minor units (5.00 NP)
+   • uInt validation working correctly
+   • Balance changes accurate
+
+Test completed: Wed Oct  1 15:26:29 EDT 2025
+Full results saved to: TEST.log

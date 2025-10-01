@@ -3,8 +3,8 @@
 /**
  * NANDA Facilitator Server
  *
- * Pure Hono x402 payment facilitator following:
- * - Cloudflare patterns: Pure Hono app export
+ * x402 payment facilitator following:
+ * - Cloudflare patterns: Hono app export
  * - Coinbase patterns: Simple verify/settle functions
  * - MongoDB for NANDA Points ledger interface
  * - Node.js native HTTP server for runtime
@@ -169,7 +169,7 @@ async function main() {
     const { host, port } = services.config.server;
 
     console.log(`🌟 NANDA Facilitator starting on http://${host}:${port}`);
-    console.log('📋 Core endpoints (Coinbase pattern):');
+    console.log('📋 Core x402 endpoints:');
     console.log('  • POST /verify - Verify x402 payment');
     console.log('  • POST /settle - Settle verified payment');
     console.log('');
@@ -178,7 +178,6 @@ async function main() {
     console.log('  • GET /api/v1/agents/:name/balance - Agent balance');
     console.log('');
     console.log('💰 NANDA Points - MongoDB ledger');
-    console.log('⚡ Pure Hono - Cloudflare patterns');
     console.log('');
 
     console.log(`✅ NANDA Facilitator ready at http://${host}:${port}`);

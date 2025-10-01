@@ -208,6 +208,78 @@ const sampleAgents: CreateAgentInput[] = [
     username: 'test_agent',
     email: 'test@nanda.org',
   },
+  {
+    agent_name: 'weather-agent',
+    label: 'Weather Agent',
+    description: 'Real-time weather data and forecasting services',
+    version: '1.0.0',
+    documentationUrl: 'https://docs.nanda.org/agents/weather',
+    jurisdiction: 'USA',
+    provider: {
+      name: 'NANDA Weather',
+      url: 'https://weather.nanda.org',
+      did: 'did:web:nanda.org:agents:weather',
+    },
+    endpoints: {
+      static: ['https://weather.nanda.org/api'],
+      adaptive_resolver: {
+        url: 'https://weather.nanda.org/resolve',
+        policies: ['rate-limit', 'auth-required'],
+      },
+    },
+    capabilities: {
+      modalities: ['text', 'structured-data'],
+      streaming: false,
+      batch: true,
+      authentication: {
+        methods: ['api-key'],
+        requiredScopes: ['weather:read'],
+      },
+    },
+    skills: [
+      {
+        id: 'current-weather',
+        description: 'Get current weather conditions for any location',
+        inputModes: ['text', 'json'],
+        outputModes: ['json', 'text'],
+        supportedLanguages: ['en'],
+      },
+      {
+        id: 'weather-forecast',
+        description: 'Multi-day weather forecasting',
+        inputModes: ['text', 'json'],
+        outputModes: ['json', 'text'],
+        supportedLanguages: ['en'],
+      },
+    ],
+    evaluations: {
+      performanceScore: 98,
+      availability90d: '99.8%',
+      lastAudited: new Date().toISOString(),
+      auditTrail: 'https://audit.nanda.org/weather-agent',
+      auditorID: 'audit-system-v1',
+    },
+    telemetry: {
+      enabled: true,
+      retention: '14d',
+      sampling: 0.1,
+      metrics: {
+        latency_p95_ms: 150,
+        throughput_rps: 2000,
+        error_rate: 0.0005,
+        availability: '99.95%',
+      },
+    },
+    certification: {
+      level: 'verified',
+      issuer: 'NANDA Certification Authority',
+      issuanceDate: new Date().toISOString(),
+      expirationDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+    serviceCharge: 3, // 3 NP per request
+    username: 'weather_agent',
+    email: 'weather@nanda.org',
+  },
 ];
 
 /**
@@ -249,7 +321,7 @@ async function seed() {
     // Log summary
     console.log('\n📊 Seed Summary:');
     console.log(`  • Created ${createdAgents.length} agents`);
-    console.log(`  • Each agent has a wallet with ${config.nandaPoints.defaultBalanceMinor / 100} NP`);
+    console.log(`  • Each agent has a wallet with 100.00 NP`);
 
     console.log('\n👤 Created Agents:');
     for (const agent of createdAgents) {

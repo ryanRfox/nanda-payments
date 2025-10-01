@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { PaymentRequirementsSchema, PaymentPayloadSchema } from 'x402/types';
+import { NandaPaymentRequirementsSchema, NandaPaymentPayloadSchema } from './x402-nanda.js';
 
 /**
  * Payment Session Model
@@ -18,9 +19,9 @@ export const PaymentSessionSchema = z.object({
   toAgent: z.string(), // Expert agent
   status: z.enum(['pending', 'verified', 'settled', 'expired']),
 
-  // x402 Data
-  paymentRequirements: PaymentRequirementsSchema,
-  paymentPayload: PaymentPayloadSchema.optional(),
+  // x402 Data - support both standard x402 and NANDA-specific formats
+  paymentRequirements: z.union([PaymentRequirementsSchema, NandaPaymentRequirementsSchema]),
+  paymentPayload: z.union([PaymentPayloadSchema, NandaPaymentPayloadSchema]).optional(),
 
   // Timestamps
   expiresAt: z.string(),
@@ -53,11 +54,11 @@ export const UpdatePaymentSessionSchema = PaymentSessionSchema.partial().extend(
 export type UpdatePaymentSessionInput = z.infer<typeof UpdatePaymentSessionSchema>;
 
 /**
- * Verify request schema (x402 /verify endpoint)
+ * Verify request schema (x402 /verify endpoint) - supports both standard x402 and NANDA formats
  */
 export const VerifyRequestSchema = z.object({
-  paymentPayload: PaymentPayloadSchema,
-  paymentRequirements: PaymentRequirementsSchema,
+  paymentPayload: z.union([PaymentPayloadSchema, NandaPaymentPayloadSchema]),
+  paymentRequirements: z.union([PaymentRequirementsSchema, NandaPaymentRequirementsSchema]),
 });
 
 export type VerifyRequest = z.infer<typeof VerifyRequestSchema>;
@@ -75,11 +76,11 @@ export const VerifyResponseSchema = z.object({
 export type VerifyResponse = z.infer<typeof VerifyResponseSchema>;
 
 /**
- * Settle request schema (x402 /settle endpoint)
+ * Settle request schema (x402 /settle endpoint) - supports both standard x402 and NANDA formats
  */
 export const SettleRequestSchema = z.object({
   sessionId: z.string().uuid(),
-  paymentPayload: PaymentPayloadSchema,
+  paymentPayload: z.union([PaymentPayloadSchema, NandaPaymentPayloadSchema]),
 });
 
 export type SettleRequest = z.infer<typeof SettleRequestSchema>;

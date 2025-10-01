@@ -17,13 +17,20 @@ export class WalletService {
   constructor(private db: DatabaseService) {}
 
   /**
-   * Create a new wallet for an agent
+   * Create a new wallet (simplified Coinbase pattern)
+   * Agent name is optional - walletId is the primary identifier
    */
-  async createWallet(input: CreateWalletInput): Promise<Wallet> {
+  async createWallet(input: Partial<CreateWalletInput> & {
+    walletId?: string;
+    initialBalance?: number;
+  }): Promise<Wallet> {
     const now = new Date().toISOString();
     const wallet: Wallet = {
-      walletId: randomUUID(),
-      ...input,
+      walletId: input.walletId || randomUUID(),
+      agent_name: input.agent_name || '', // Empty string if no agent
+      currency: 'NP',
+      scale: 2,
+      balanceMinor: input.initialBalance || input.balanceMinor || 0,
       createdAt: now,
       updatedAt: now,
     };
@@ -78,15 +85,13 @@ export class WalletService {
       return { success: false, error: 'Invalid transfer amount' };
     }
 
-    return await this.db.withTransaction(async (session) => {
+    return await this.db.withTransaction(async () => {
       // Get current balances
       const fromWallet = await this.db.collections.wallets.findOne(
-        { walletId: fromWalletId },
-        { session }
+        { walletId: fromWalletId }
       );
       const toWallet = await this.db.collections.wallets.findOne(
-        { walletId: toWalletId },
-        { session }
+        { walletId: toWalletId }
       );
 
       if (!fromWallet) {
@@ -117,8 +122,7 @@ export class WalletService {
               balanceMinor: newFromBalance,
               updatedAt: now,
             },
-          },
-          { session }
+          }
         ),
         this.db.collections.wallets.updateOne(
           { walletId: toWalletId },
@@ -127,8 +131,7 @@ export class WalletService {
               balanceMinor: newToBalance,
               updatedAt: now,
             },
-          },
-          { session }
+          }
         ),
       ]);
 
