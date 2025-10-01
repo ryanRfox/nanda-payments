@@ -10,6 +10,7 @@ import type { PaymentSessionService } from '../services/payment-session-service.
  * Core Facilitator Routes
  *
  * Implements the x402 facilitator endpoints:
+ * - GET /supported - List supported payment kinds
  * - POST /verify - Verify payment payload against requirements
  * - POST /settle - Settle verified payment
  */
@@ -17,6 +18,22 @@ export function createFacilitatorRoutes(
   paymentSessionService: PaymentSessionService
 ) {
   const app = new Hono();
+
+  /**
+   * GET /supported
+   * Returns supported payment kinds for x402 protocol discovery
+   */
+  app.get('/supported', (c) => {
+    return c.json({
+      supportedPaymentKinds: [
+        {
+          scheme: 'exact',
+          network: 'nanda-points',
+          version: 1,
+        },
+      ],
+    });
+  });
 
   /**
    * POST /verify

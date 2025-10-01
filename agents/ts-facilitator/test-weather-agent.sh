@@ -7,8 +7,8 @@ WEATHER_AGENT="http://localhost:3001"
 FACILITATOR="http://localhost:3000"
 
 # Wallet IDs from MongoDB
-FROM_WALLET="75ddc385-e780-481f-9aae-8d986f9ca67b"  # summary-agent (has 100 NP)
-TO_WALLET="ac29a924-b17c-44b7-b94f-9d14db21e1b1"    # weather-agent
+FROM_WALLET="efea794f-bf21-46c5-847f-7340c38e3eba"  # search-agent
+TO_WALLET="70faae34-dddf-4429-9913-0245cb849a09"    # weather-agent
 
 echo "🌤️  Testing Weather Agent"
 echo "======================="

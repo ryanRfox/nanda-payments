@@ -23,6 +23,13 @@ export {
   NandaSDKError,
 } from './types.js';
 
+// Middleware exports
+export {
+  nandaPaymentMiddleware,
+  type NandaPaymentMiddlewareOptions,
+  type NandaRouteConfig,
+} from './middleware/hono.js';
+
 /**
  * Create a new NANDA client instance
  */
