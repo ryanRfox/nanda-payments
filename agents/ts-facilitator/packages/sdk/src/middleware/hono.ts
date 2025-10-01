@@ -52,7 +52,7 @@ export function nandaPaymentMiddleware(
   const client = new NandaClient({ facilitatorUrl });
 
   return async (c: Context, next: Next) => {
-    const path = new URL(c.req.url).pathname;
+    const path = c.req.path;
     const routeConfig = options.routes[path];
 
     // Not a protected route - skip payment

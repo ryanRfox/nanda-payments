@@ -1,4 +1,4 @@
-import { MongoClient, Db } from 'mongodb';
+import { MongoClient, Db, Collection, IndexSpecification, CreateIndexesOptions, Document } from 'mongodb';
 import type { Config } from '../models/config.js';
 import type { Agent } from '../models/agent.js';
 import type { Wallet } from '../models/wallet.js';
@@ -106,12 +106,17 @@ export class DatabaseService {
     const { agents, wallets, transactions, paymentSessions } = this.collections;
 
     // Helper to create index safely (ignore if exists)
-    const createIndexSafe = async (collection: any, spec: any, options?: any) => {
+    const createIndexSafe = async <T extends Document = Document>(
+      collection: Collection<T>,
+      spec: IndexSpecification,
+      options?: CreateIndexesOptions
+    ) => {
       try {
         await collection.createIndex(spec, options);
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Ignore index already exists errors
-        if (error.code !== 86 && error.codeName !== 'IndexKeySpecsConflict') {
+        const mongoError = error as { code?: number; codeName?: string };
+        if (mongoError.code !== 86 && mongoError.codeName !== 'IndexKeySpecsConflict') {
           throw error;
         }
       }

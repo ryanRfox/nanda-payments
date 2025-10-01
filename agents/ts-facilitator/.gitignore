@@ -96,3 +96,11 @@ playwright-report/
 # Logs
 logs
 *.log
+
+# MongoDB data directory
+packages/facilitator/data/
+
+# Test files in package roots (should be in tests/ folder)
+packages/*/test-*.ts
+packages/*/test-*.js
+packages/*/test-*.cjs

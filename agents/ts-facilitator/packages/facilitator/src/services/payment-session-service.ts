@@ -16,10 +16,8 @@ import { NandaPoints } from '../models/wallet.js';
 import {
   NandaX402Utils,
   NandaVerifyRequestSchema,
-  NandaSettleRequestSchema,
   type NandaPaymentPayload,
   type NandaPaymentRequirements,
-  NANDA_NETWORK,
 } from '../models/x402-nanda.js';
 
 /**
@@ -196,7 +194,7 @@ export class PaymentSessionService {
       }
 
       // Step 3: Extract payment information from legacy payload
-      const { fromWalletId, toWalletId, amount: payloadAmount, isX402Compliant } = this.extractPaymentDetails(paymentPayload, paymentRequirements);
+      const { fromWalletId, toWalletId, amount: payloadAmount } = this.extractPaymentDetails(paymentPayload, paymentRequirements);
       const resource = paymentRequirements.resource || 'unknown';
 
       if (!fromWalletId || !toWalletId || (payloadAmount === null || payloadAmount === undefined || payloadAmount === '')) {

@@ -50,11 +50,9 @@ Client Application → NANDA Facilitator → MongoDB
 
 ## 📖 Documentation
 
-- **[API Reference](./docs/api-reference.md)** - Complete API documentation
-- **[Integration Guide](./docs/integration-guide.md)** - How to integrate x402 payments
-- **[Deployment Guide](./docs/deployment-guide.md)** - Production deployment instructions
-- **[SDK Documentation](./packages/sdk/README.md)** - TypeScript client library
-- **[Example Applications](./examples/README.md)** - Integration patterns and demos
+- **[SDK Documentation](./packages/sdk/README.md)** - Comprehensive TypeScript client library with x402 integration guide
+- **[Facilitator Documentation](./packages/facilitator/README.md)** - Core service documentation
+- **[Weather Agent Example](./packages/sdk/examples/weather-agent/README.md)** - Production-ready weather agent with x402 middleware
 
 ## 💰 NANDA Points (NP)
 
@@ -163,33 +161,55 @@ curl http://localhost:8080/api/v1/stats
 ## 📦 Project Structure
 
 ```
-packages/
-├── facilitator/         # Core x402 payment service
-│   ├── src/
-│   │   ├── routes/     # HTTP endpoints (/verify, /settle, /api)
-│   │   ├── services/   # Business logic (payments, wallets, agents)
-│   │   ├── models/     # Data models and schemas
-│   │   └── server.ts   # Main server entry point
-│   ├── tests/          # Integration tests (17/17 passing)
-│   └── dist/           # Built JavaScript
-└── sdk/                # TypeScript client library
-    ├── src/client.ts   # NandaClient class
-    ├── src/types.ts    # Type definitions
-    └── dist/           # Built JavaScript
-
-examples/
-├── api-service/        # REST API with premium endpoints
-├── content-service/    # Content paywall with subscriptions
-├── processing-service/ # Usage-based compute pricing
-└── expert-agent/       # MCP server monetization (before/after)
-
-docs/                   # Complete documentation
-├── api-reference.md    # API endpoints and models
-├── integration-guide.md # Payment integration patterns
-└── deployment-guide.md  # Production deployment
-
-docker/k8s/nginx/       # Production deployment configs
+agents/ts-facilitator/
+├── packages/
+│   ├── facilitator/           # Core x402 payment service
+│   │   ├── src/
+│   │   │   ├── routes/        # HTTP endpoints (/verify, /settle, /supported, /api)
+│   │   │   ├── services/      # Business logic (payments, wallets, agents, database)
+│   │   │   ├── models/        # Data models and x402 schemas
+│   │   │   ├── scripts/       # Database seed and utility scripts
+│   │   │   └── server.ts      # Main server entry point
+│   │   ├── tests/             # Integration tests (17/17 passing)
+│   │   └── package.json       # @nanda/facilitator
+│   │
+│   └── sdk/                   # TypeScript client library
+│       ├── src/
+│       │   ├── client.ts      # NandaClient class
+│       │   ├── types.ts       # Type definitions
+│       │   ├── middleware/    # Hono x402 middleware
+│       │   └── index.ts       # Public API exports
+│       ├── examples/
+│       │   └── weather-agent/ # Production weather agent example
+│       └── package.json       # @nanda/sdk
+│
+├── docs/                      # Research and planning documents
+│   ├── x402_RESEARCH.md       # x402 protocol research
+│   ├── TECHNICAL_PLAN.md      # Technical implementation plan
+│   └── PRODUCT_REQUIREMENTS.md # Product requirements
+│
+├── test-*.sh                  # Integration test scripts
+├── package.json               # Root workspace config
+└── README.md                  # This file
 ```
+
+### Key Components
+
+**Facilitator Service** - Complete x402 payment processor
+- `/verify` - Verify payment authorization
+- `/settle` - Execute balance transfer
+- `/supported` - x402 protocol discovery
+- `/api/v1/*` - Explorer API (balances, transactions, stats)
+
+**SDK Client** - Easy integration library
+- `NandaClient` - Main client class
+- `nandaPaymentMiddleware` - Hono middleware for route protection
+- Full TypeScript support with type safety
+
+**Weather Agent Example** - Production-ready demo
+- Free endpoint: `/forecast` (no payment)
+- Paid endpoint: `/alerts` (100 NP)
+- Clean middleware integration (8 lines vs 100+ manual implementation)
 
 ## 🚦 Implementation Status
 
@@ -333,7 +353,7 @@ npm test -- --watch
 - `GET /ready` - Readiness check with dependency status
 - `GET /metrics` - Service metrics for monitoring
 
-See [API Reference](./docs/api-reference.md) for complete documentation.
+See the [SDK Documentation](./packages/sdk/README.md) for complete API details and integration examples.
 
 ## 🚀 Production Deployment
 
@@ -366,8 +386,6 @@ cd packages/facilitator
 npm run build
 NODE_ENV=production MONGODB_URI=your-uri npm start
 ```
-
-See [Deployment Guide](./docs/deployment-guide.md) for complete instructions.
 
 ## 🔐 Production Security
 

@@ -43,7 +43,7 @@ export class AgentService {
 
       // Create associated wallet with the same walletId as the agent
       // Set consistent balance for all agents
-      let customBalance = 10000; // 100.0 NP in minor units for all agents
+      const customBalance = 10000; // 100.0 NP in minor units for all agents
 
       await this.walletService.createWallet({
         walletId: agent.walletId, // Use the same UUID as the agent
