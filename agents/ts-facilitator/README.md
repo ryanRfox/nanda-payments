@@ -17,7 +17,7 @@ docker-compose up
 cd packages/facilitator
 npm run dev
 
-# Access facilitator at http://localhost:8080
+# Access facilitator at http://localhost:3000
 ```
 
 ## 📋 Architecture Overview
@@ -36,22 +36,21 @@ Client Application → NANDA Facilitator → MongoDB
 1. **NANDA Facilitator** (`packages/facilitator/`) - x402 payment verification and settlement service
 2. **NANDA SDK** (`packages/sdk/`) - TypeScript client library for easy integration
 3. **Example Applications** (`examples/`) - Complete integration examples
-4. **Deployment Tools** (`docker/`, `k8s/`) - Production deployment configurations
+4. **Deployment Tools** (`docker/`) - Production deployment configurations
 
 ## 🛠️ Technology Stack
 
 - **Runtime**: Node.js 20+
-- **Framework**: Hono (4x faster than Express, type-safe)
+- **Framework**: Hono 
 - **Database**: MongoDB 6.0+ with proper indexing and atomic transactions
 - **Currency**: NANDA Points (NP) with 2-decimal precision (1 NP = 100 minor units)
 - **Protocol**: Full x402 Payment Required specification compliance
-- **Testing**: Vitest with 17/17 integration tests passing
-- **Deployment**: Docker, Kubernetes, cloud-ready with monitoring
+- **Deployment**: Docker
 
 ## 📖 Documentation
 
-- **[SDK Documentation](./packages/sdk/README.md)** - Comprehensive TypeScript client library with x402 integration guide
 - **[Facilitator Documentation](./packages/facilitator/README.md)** - Core service documentation
+- **[SDK Documentation](./packages/sdk/README.md)** - Comprehensive TypeScript client library with x402 integration guide
 - **[Weather Agent Example](./packages/sdk/examples/weather-agent/README.md)** - Production-ready weather agent with x402 middleware
 
 ## 💰 NANDA Points (NP)
@@ -65,82 +64,96 @@ Real micropayment currency with:
 
 ## 🔌 Integration Examples
 
-### Simple API Protection
+### Recommended: Use Middleware (Cleanest Approach)
+
+```typescript
+import { Hono } from 'hono';
+import { nandaPaymentMiddleware } from '@nanda/sdk';
+
+const app = new Hono();
+
+// Apply middleware to protect specific routes
+app.use(
+  nandaPaymentMiddleware({
+    facilitatorUrl: 'http://localhost:3000',
+    payTo: 'your-agent-wallet-id',
+    routes: {
+      '/premium': { price: 10, description: 'Premium content' },
+      '/api/analyze': { price: 5, description: 'Text analysis' },
+    },
+  })
+);
+
+// Protected endpoint - payment handled automatically!
+app.post('/api/analyze', (c) => {
+  const payment = c.get('payment'); // Injected by middleware
+  const data = analyzeText(c.req.json());
+
+  return c.json({
+    result: data,
+    transaction: payment.transactionId
+  });
+});
+```
+
+### Manual Payment Flow (Advanced)
+
+For custom payment logic not using Hono:
 
 ```typescript
 import { NandaClient } from '@nanda/sdk';
-import { Hono } from 'hono';
 
-const app = new Hono();
 const nanda = new NandaClient({
-  facilitatorUrl: 'http://localhost:8080'
+  facilitatorUrl: 'http://localhost:3000'
 });
 
-// Premium endpoint requiring 5.00 NP
-app.post('/api/analyze', async (c) => {
-  const payment = c.req.header('x-payment');
-
-  if (!payment) {
-    return c.json({ error: 'Payment Required', x402: { cost: 500 } }, 402);
-  }
-
-  const verification = await nanda.verifyPayment(JSON.parse(payment));
-  if (!verification.valid) {
-    return c.json({ error: 'Invalid Payment' }, 402);
-  }
-
-  // Process request
-  const result = await analyzeText(c.req.json());
-
-  // Settle payment
-  await nanda.settlePayment({
-    sessionId: verification.sessionId,
-    paymentPayload: JSON.parse(payment).paymentPayload
-  });
-
-  return c.json(result);
-});
-```
-
-### Usage-Based Pricing
-
-```typescript
-// Variable cost based on computational complexity
-const cost = calculateCost(jobType, parameters);
-
+// Verify payment
 const verification = await nanda.verifyPayment({
-  paymentPayload,
+  paymentPayload: payment.paymentPayload,
   paymentRequirements: {
     scheme: 'exact',
-    maxAmountRequired: cost.toString(),
-    resource: `/api/process/${jobType}`,
-    description: `Processing job: ${jobType}`
+    network: 'nanda-points',
+    payTo: 'recipient-wallet-id',
+    maxAmountRequired: 1000, // 10.00 NP in minor units
+    resource: '/api/resource',
+    description: 'API access',
+    asset: 'NP',
   }
+});
+
+if (!verification.valid) {
+  throw new Error(`Payment invalid: ${verification.reason}`);
+}
+
+// Settle payment after service delivery
+const settlement = await nanda.settlePayment({
+  sessionId: verification.sessionId!,
+  paymentPayload: payment.paymentPayload,
 });
 ```
 
-### Content Paywall
+### Explorer API Usage
 
 ```typescript
-// Premium content access
-app.get('/articles/:id', async (c) => {
-  const article = await getArticle(c.req.param('id'));
+import { NandaClient } from '@nanda/sdk';
 
-  if (article.tier === 'premium') {
-    const payment = c.req.header('x-payment');
-
-    if (!payment) {
-      return c.json({
-        preview: article.preview,
-        x402: { cost: article.cost, description: article.title }
-      }, 402);
-    }
-
-    // Verify and settle payment, then return full content
-  }
-
-  return c.json(article);
+const nanda = new NandaClient({
+  facilitatorUrl: 'http://localhost:3000'
 });
+
+// Check agent balance
+const balance = await nanda.getAgentBalance('weather-agent');
+console.log(`Balance: ${balance.formattedBalance}`);
+
+// List recent transactions
+const { transactions } = await nanda.listTransactions({
+  agent: 'weather-agent',
+  limit: 10
+});
+
+// Get network stats
+const stats = await nanda.getNetworkStats();
+console.log(`Total agents: ${stats.totalAgents}`);
 ```
 
 ### Explorer API
