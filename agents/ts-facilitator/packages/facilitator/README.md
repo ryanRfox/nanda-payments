@@ -324,27 +324,21 @@ All internal calculations use minor units for precision.
 
 ## Deployment
 
-### Docker
-
-```dockerfile
-FROM node:20-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production
-COPY dist/ ./dist/
-EXPOSE 3000
-CMD ["node", "dist/server.js"]
-```
-
 ### Production Environment
 
 ```bash
+# Build the application
+npm run build
+
+# Configure environment
 NODE_ENV=production
 PORT=3000
 MONGODB_URI=mongodb://production-host:27017
-MONGODB_DB_NAME=nanda_production
-REQUIRE_HTTPS=true
+NP_DB_NAME=nanda_production
 CORS_ORIGINS=https://app.example.com
+
+# Start the server
+npm start
 ```
 
 ## Integration

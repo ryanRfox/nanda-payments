@@ -1,6 +1,6 @@
-# NANDA TypeScript Facilitator
+# NANDA Points Facilitator for NeST
 
-> Production-ready x402 payment facilitator for the NANDA ecosystem. Enables HTTP 402 Payment Required micropayments using NANDA Points (NP) with MongoDB backend for real-time verification and settlement.
+> A TypeScript x402 payment facilitator for the NANDA ecosystem. Enables HTTP 402 Payment Required micropayments using NANDA Points (NP) with MongoDB backend for real-time verification and settlement.
 
 ## 🚀 Quick Start
 
@@ -10,10 +10,7 @@ git clone <repository-url>
 cd nanda-payments/agents/ts-facilitator
 npm install
 
-# Start with Docker (recommended)
-docker-compose up
-
-# Or start locally
+# Start the facilitator
 cd packages/facilitator
 npm run dev
 
@@ -36,16 +33,14 @@ Client Application → NANDA Facilitator → MongoDB
 1. **NANDA Facilitator** (`packages/facilitator/`) - x402 payment verification and settlement service
 2. **NANDA SDK** (`packages/sdk/`) - TypeScript client library for easy integration
 3. **Example Applications** (`examples/`) - Complete integration examples
-4. **Deployment Tools** (`docker/`) - Production deployment configurations
 
 ## 🛠️ Technology Stack
 
 - **Runtime**: Node.js 20+
-- **Framework**: Hono 
+- **Framework**: Hono
 - **Database**: MongoDB 6.0+ with proper indexing and atomic transactions
 - **Currency**: NANDA Points (NP) with 2-decimal precision (1 NP = 100 minor units)
 - **Protocol**: Full x402 Payment Required specification compliance
-- **Deployment**: Docker
 
 ## 📖 Documentation
 
@@ -196,11 +191,6 @@ agents/ts-facilitator/
 │       │   └── weather-agent/ # Production weather agent example
 │       └── package.json       # @nanda/sdk
 │
-├── docs/                      # Research and planning documents
-│   ├── x402_RESEARCH.md       # x402 protocol research
-│   ├── TECHNICAL_PLAN.md      # Technical implementation plan
-│   └── PRODUCT_REQUIREMENTS.md # Product requirements
-│
 ├── test-*.sh                  # Integration test scripts
 ├── package.json               # Root workspace config
 └── README.md                  # This file
@@ -252,7 +242,6 @@ agents/ts-facilitator/
 
 ### Prerequisites
 - Node.js 20+
-- Docker and Docker Compose (recommended)
 - MongoDB 6.0+ (or MongoDB Atlas)
 
 ### Quick Development Setup
@@ -263,12 +252,11 @@ git clone <repo-url>
 cd nanda-payments/agents/ts-facilitator
 npm install
 
-# 2. Start with Docker (easiest)
-docker-compose -f docker-compose.dev.yml up
-
-# 3. Or start locally
+# 2. Configure environment
 export MONGODB_URI=mongodb://localhost:27017
-export MONGODB_DB_NAME=nanda_development
+export NP_DB_NAME=nanda_points
+
+# 3. Start the facilitator
 cd packages/facilitator
 npm run dev
 ```
@@ -315,14 +303,6 @@ CORS_ORIGINS=http://localhost:3000,http://localhost:3001
 
 ## 🧪 Testing
 
-Production-ready testing suite with comprehensive coverage:
-
-### Test Suite Status
-- **Integration Tests**: 17/17 passing ✅
-- **Test Coverage**: Payment flows, error conditions, database operations
-- **Test Environment**: MongoDB Memory Server for isolation
-- **Mock Data**: Complete x402 payload generators
-
 ### Running Tests
 ```bash
 cd packages/facilitator
@@ -341,14 +321,6 @@ npm test -- api-endpoints
 # Watch mode for development
 npm test -- --watch
 ```
-
-### Test Coverage Areas
-- ✅ Payment verification with real x402 payloads
-- ✅ Balance validation and insufficient funds handling
-- ✅ Session lifecycle (create, verify, settle, expire)
-- ✅ Database constraints and indexing validation
-- ✅ API endpoint responses and error handling
-- ✅ NANDA Points precision and conversion utilities
 
 ## 🌍 API Endpoints
 
@@ -370,52 +342,21 @@ See the [SDK Documentation](./packages/sdk/README.md) for complete API details a
 
 ## 🚀 Production Deployment
 
-### Docker (Recommended)
-
 ```bash
-# Production deployment with Docker Compose
+# 1. Clone and install
 git clone <repo-url>
 cd nanda-payments/agents/ts-facilitator
-cp .env.example .env  # Configure your environment
-docker-compose up -d
-
-# Facilitator available at http://localhost:3000
-```
-
-### Kubernetes
-
-```bash
-# Deploy to Kubernetes cluster
-kubectl create namespace nanda
-kubectl apply -f k8s/
-```
-
-### Manual Installation
-
-```bash
-# Build and run manually
 npm install
+
+# 2. Configure environment
+cp packages/facilitator/.env.example packages/facilitator/.env
+# Edit .env with your production settings
+
+# 3. Build and start
 cd packages/facilitator
 npm run build
-NODE_ENV=production MONGODB_URI=your-uri npm start
+NODE_ENV=production npm start
 ```
-
-## 🔐 Production Security
-
-Built-in security features for production deployment:
-
-- ✅ **Input Validation**: Comprehensive Zod schemas for all endpoints
-- ✅ **Error Handling**: No sensitive data exposure in error responses
-- ✅ **Health Monitoring**: Proper health checks and dependency validation
-- ✅ **Database Security**: Prepared statements and injection prevention
-- ✅ **Session Management**: Automatic expiration with TTL indexes
-- ✅ **CORS Configuration**: Configurable origin restrictions
-- ✅ **Request Logging**: Structured logging without sensitive data
-
-Additional security in Nginx/reverse proxy:
-- ✅ **Rate Limiting**: Configurable per-endpoint rate limits
-- ✅ **SSL/TLS**: HTTPS enforcement and security headers
-- ✅ **Network Policies**: Kubernetes network isolation
 
 ## 🤝 Contributing
 
@@ -436,15 +377,3 @@ Additional security in Nginx/reverse proxy:
 
 MIT License - see [LICENSE](./LICENSE) file for details.
 
-## 🙏 Acknowledgments
-
-- **x402 Protocol**: HTTP 402 Payment Required specification
-- **Hono Framework**: High-performance TypeScript web framework
-- **MongoDB**: Document database with atomic transaction support
-- **Vitest**: Fast and modern testing framework
-
----
-
-**Status**: 🟢 Production Ready
-**Version**: 1.0.0-beta
-**Last Updated**: January 2025
