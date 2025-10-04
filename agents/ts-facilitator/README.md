@@ -242,7 +242,45 @@ agents/ts-facilitator/
 
 ### Prerequisites
 - Node.js 20+
-- MongoDB 6.0+ (or MongoDB Atlas)
+- MongoDB 6.0+ (standalone or replica set)
+
+### MongoDB Setup
+
+The facilitator works with either standalone MongoDB (development) or a replica set (production).
+
+**Standalone MongoDB** (Development):
+```bash
+# Install MongoDB locally
+brew install mongodb-community  # macOS
+# or
+apt-get install mongodb         # Linux
+
+# Start MongoDB
+mongod --dbpath=/path/to/data
+```
+
+**MongoDB Replica Set** (Production):
+```bash
+# Option 1: MongoDB Atlas (recommended)
+# Sign up at mongodb.com/cloud/atlas
+# Create a cluster and copy the connection string
+# Atlas automatically runs as a replica set
+
+# Option 2: Local replica set
+mongod --replSet rs0 --port 27017 --dbpath=/path/to/data1
+mongod --replSet rs0 --port 27018 --dbpath=/path/to/data2
+mongod --replSet rs0 --port 27019 --dbpath=/path/to/data3
+
+# Initialize the replica set (one-time)
+mongosh --eval 'rs.initiate({
+  _id: "rs0",
+  members: [
+    { _id: 0, host: "localhost:27017" },
+    { _id: 1, host: "localhost:27018" },
+    { _id: 2, host: "localhost:27019" }
+  ]
+})'
+```
 
 ### Quick Development Setup
 
@@ -252,11 +290,15 @@ git clone <repo-url>
 cd nanda-payments/agents/ts-facilitator
 npm install
 
-# 2. Configure environment
+# 2. Start MongoDB (standalone)
+mongod --dbpath=/path/to/data
+
+# 3. Configure environment
 export MONGODB_URI=mongodb://localhost:27017
 export NP_DB_NAME=nanda_points
+export MONGODB_USE_TRANSACTIONS=false
 
-# 3. Start the facilitator
+# 4. Start the facilitator
 cd packages/facilitator
 npm run dev
 ```
@@ -287,18 +329,34 @@ npm install && npm run dev     # Port 3005
 ```
 
 ### Environment Variables
+
+**Development** (standalone MongoDB):
 ```bash
-# Core configuration
 NODE_ENV=development
 PORT=3000
 MONGODB_URI=mongodb://localhost:27017
-MONGODB_DB_NAME=nanda_development
+NP_DB_NAME=nanda_points
+MONGODB_USE_TRANSACTIONS=false
 
-# Optional settings
-SESSION_EXPIRATION_MINUTES=60
-PERIODIC_CLEANUP_MINUTES=30
-LOG_LEVEL=debug
-CORS_ORIGINS=http://localhost:3000,http://localhost:3001
+# Optional
+SESSION_EXPIRATION_MINUTES=30
+CORS_ORIGINS=*
+```
+
+**Production** (replica set required):
+```bash
+NODE_ENV=production
+PORT=3000
+MONGODB_URI=mongodb://localhost:27017,localhost:27018,localhost:27019/?replicaSet=rs0
+NP_DB_NAME=nanda_points
+MONGODB_USE_TRANSACTIONS=true
+
+# MongoDB Atlas example
+# MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/?retryWrites=true&w=majority
+
+# Optional
+SESSION_EXPIRATION_MINUTES=30
+CORS_ORIGINS=https://yourdomain.com
 ```
 
 ## 🧪 Testing
@@ -342,20 +400,28 @@ See the [SDK Documentation](./packages/sdk/README.md) for complete API details a
 
 ## 🚀 Production Deployment
 
+Production deployments require a MongoDB replica set for atomic transactions.
+
 ```bash
-# 1. Clone and install
+# 1. Set up MongoDB replica set
+# Use MongoDB Atlas (recommended) or self-host a 3+ node replica set
+
+# 2. Clone and install
 git clone <repo-url>
 cd nanda-payments/agents/ts-facilitator
 npm install
 
-# 2. Configure environment
+# 3. Configure environment
 cp packages/facilitator/.env.example packages/facilitator/.env
-# Edit .env with your production settings
+# Edit .env:
+#   NODE_ENV=production
+#   MONGODB_URI=mongodb://mongo1,mongo2,mongo3/?replicaSet=rs0
+#   MONGODB_USE_TRANSACTIONS=true
 
-# 3. Build and start
+# 4. Build and start
 cd packages/facilitator
 npm run build
-NODE_ENV=production npm start
+npm start
 ```
 
 ## 🤝 Contributing

@@ -4,7 +4,7 @@ A TypeScript x402 payment facilitator for NANDA Points micropayments using Mongo
 
 ## Overview
 
-The NANDA Facilitator implements the x402 Payment Required protocol for HTTP micropayments using NANDA Points (NP) using MongoDB as the Ledger. It provides payment verification and settlement services following Coinbase's reference facilitator patterns while maintaining simplicity with MongoDB standalone storage.
+The NANDA Facilitator implements the x402 Payment Required protocol for HTTP micropayments using NANDA Points (NP) with MongoDB as the ledger. It provides payment verification and settlement services following Coinbase's reference facilitator patterns.
 
 ### Key Features
 
@@ -12,7 +12,7 @@ The NANDA Facilitator implements the x402 Payment Required protocol for HTTP mic
 - **Payment Verification**: `/verify` endpoint for payment authorization
 - **Payment Settlement**: `/settle` endpoint for completing transactions
 - **NANDA Points**: Custom currency with 2 decimal places (1 NP = 100 minor units)
-- **MongoDB Integration**: Standalone MongoDB for wallet and transaction storage
+- **MongoDB Integration**: Atomic transactions with replica set support
 - **Hono**: Uses Hono framework without additional adapters
 - **Health Monitoring**: Built-in health checks and metrics
 
@@ -21,7 +21,7 @@ The NANDA Facilitator implements the x402 Payment Required protocol for HTTP mic
 ### Prerequisites
 
 - Node.js 20+
-- MongoDB running on `localhost:27017`
+- MongoDB 6.0+ (standalone for development, replica set for production)
 
 ### Installation
 
@@ -34,10 +34,18 @@ npm install
 Create `.env` file:
 
 ```bash
+# Development (standalone MongoDB)
+NODE_ENV=development
 HOST=localhost
 PORT=3000
 MONGODB_URI=mongodb://127.0.0.1:27017
-MONGODB_DB_NAME=nanda_points
+NP_DB_NAME=nanda_points
+MONGODB_USE_TRANSACTIONS=false
+
+# Production (replica set required)
+# NODE_ENV=production
+# MONGODB_URI=mongodb://mongo1,mongo2,mongo3/?replicaSet=rs0
+# MONGODB_USE_TRANSACTIONS=true
 ```
 
 ### Running the Facilitator
@@ -326,6 +334,8 @@ All internal calculations use minor units for precision.
 
 ### Production Environment
 
+Production requires a MongoDB replica set for atomic transaction support.
+
 ```bash
 # Build the application
 npm run build
@@ -333,8 +343,9 @@ npm run build
 # Configure environment
 NODE_ENV=production
 PORT=3000
-MONGODB_URI=mongodb://production-host:27017
+MONGODB_URI=mongodb://mongo1:27017,mongo2:27017,mongo3:27017/?replicaSet=rs0
 NP_DB_NAME=nanda_production
+MONGODB_USE_TRANSACTIONS=true
 CORS_ORIGINS=https://app.example.com
 
 # Start the server
