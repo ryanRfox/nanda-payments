@@ -352,7 +352,7 @@ NP_DB_NAME=nanda_points
 MONGODB_USE_TRANSACTIONS=true
 
 # MongoDB Atlas example
-# MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/?retryWrites=true&w=majority
+# MONGODB_URI=mongodb+srv://USER:PASS@cluster.mongodb.net/?retryWrites=true&w=majority
 
 # Optional
 SESSION_EXPIRATION_MINUTES=30
