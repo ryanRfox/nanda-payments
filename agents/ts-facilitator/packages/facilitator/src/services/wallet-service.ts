@@ -85,13 +85,15 @@ export class WalletService {
       return { success: false, error: 'Invalid transfer amount' };
     }
 
-    return await this.db.withTransaction(async () => {
-      // Get current balances
+    return await this.db.withTransaction(async (session) => {
+      // Get current balances (with session for ACID guarantees)
       const fromWallet = await this.db.collections.wallets.findOne(
-        { walletId: fromWalletId }
+        { walletId: fromWalletId },
+        { session }
       );
       const toWallet = await this.db.collections.wallets.findOne(
-        { walletId: toWalletId }
+        { walletId: toWalletId },
+        { session }
       );
 
       if (!fromWallet) {
@@ -113,7 +115,7 @@ export class WalletService {
       const newFromBalance = fromWallet.balanceMinor - amountMinor;
       const newToBalance = toWallet.balanceMinor + amountMinor;
 
-      // Update both wallets atomically
+      // Update both wallets atomically (with session for ACID guarantees)
       await Promise.all([
         this.db.collections.wallets.updateOne(
           { walletId: fromWalletId },
@@ -122,7 +124,8 @@ export class WalletService {
               balanceMinor: newFromBalance,
               updatedAt: now,
             },
-          }
+          },
+          { session }
         ),
         this.db.collections.wallets.updateOne(
           { walletId: toWalletId },
@@ -131,7 +134,8 @@ export class WalletService {
               balanceMinor: newToBalance,
               updatedAt: now,
             },
-          }
+          },
+          { session }
         ),
       ]);
 

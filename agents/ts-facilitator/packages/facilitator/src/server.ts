@@ -54,7 +54,7 @@ async function initializeServices(): Promise<AppState> {
   console.log(`📋 Configuration loaded for ${config.nodeEnv} environment`);
 
   // Initialize database
-  const db = new DatabaseService(config.mongodb);
+  const db = new DatabaseService(config);
   await db.connect();
 
   // Initialize services

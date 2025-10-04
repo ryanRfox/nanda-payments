@@ -35,7 +35,7 @@ export class TransactionService {
     };
 
     // Execute transfer and create transaction record
-    return await this.db.withTransaction(async () => {
+    return await this.db.withTransaction(async (session) => {
       // Perform wallet transfer
       const transferResult = await this.walletService.transfer(
         input.fromWallet,
@@ -52,7 +52,7 @@ export class TransactionService {
         transaction.settledAt = now;
       }
 
-      await this.db.collections.transactions.insertOne(transaction);
+      await this.db.collections.transactions.insertOne(transaction, { session });
 
       return transaction;
     });

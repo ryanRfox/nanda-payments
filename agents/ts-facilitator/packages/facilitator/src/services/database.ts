@@ -1,5 +1,6 @@
-import { MongoClient, Db, Collection, IndexSpecification, CreateIndexesOptions, Document } from 'mongodb';
+import { MongoClient, Db, Collection, IndexSpecification, CreateIndexesOptions, Document, ClientSession } from 'mongodb';
 import type { Config } from '../models/config.js';
+import { useTransactions } from '../models/config.js';
 import type { Agent } from '../models/agent.js';
 import type { Wallet } from '../models/wallet.js';
 import type { Transaction } from '../models/transaction.js';
@@ -15,9 +16,11 @@ export class DatabaseService {
   private client: MongoClient | null = null;
   private db: Db | null = null;
   private readonly config: Config['mongodb'];
+  private readonly fullConfig: Config;
 
-  constructor(config: Config['mongodb']) {
-    this.config = config;
+  constructor(fullConfig: Config) {
+    this.config = fullConfig.mongodb;
+    this.fullConfig = fullConfig;
   }
 
   /**
@@ -32,12 +35,30 @@ export class DatabaseService {
         // Reduce timeout to fail fast on connection issues
         serverSelectionTimeoutMS: 5000,
         connectTimeoutMS: 10000,
+        // Production-grade options
+        retryWrites: true,
+        retryReads: true,
       });
 
       await this.client.connect();
       this.db = this.client.db(this.config.dbName);
 
       await this.ensureIndexes();
+
+      // Verify replica set if transactions enabled
+      if (useTransactions(this.fullConfig)) {
+        const admin = this.client.db('admin');
+        const status = await admin.command({ replSetGetStatus: 1 }).catch(() => null);
+
+        if (!status) {
+          console.warn('⚠️  WARNING: MONGODB_USE_TRANSACTIONS=true but not running as replica set!');
+          console.warn('⚠️  Transactions will fail. Set MONGODB_USE_TRANSACTIONS=false for dev mode.');
+        } else {
+          console.log('✅ MongoDB replica set detected - transactions enabled');
+        }
+      } else {
+        console.log('ℹ️  Running in dev mode - transactions disabled');
+      }
 
       console.log(`✅ Connected to MongoDB: ${this.config.dbName}`);
     } catch (error) {
@@ -157,17 +178,31 @@ export class DatabaseService {
 
 
   /**
-   * Execute operation without transactions (standalone MongoDB)
-   * Simplified for development - no replica set complexity
+   * Execute operation within a transaction (if enabled)
+   * Falls back to direct execution in dev mode
    */
   async withTransaction<T>(
-    operation: () => Promise<T> // Removed session parameter - always null for standalone
+    operation: (session?: ClientSession) => Promise<T>
   ): Promise<T> {
     if (!this.client) {
       throw new Error('Database not connected');
     }
 
-    // Always run without transactions in standalone mode
-    return await operation();
+    if (!useTransactions(this.fullConfig)) {
+      // Dev mode: run without transaction
+      return await operation(undefined);
+    }
+
+    // Prod mode: use transaction
+    const session = this.client.startSession();
+    try {
+      let result: T;
+      await session.withTransaction(async () => {
+        result = await operation(session);
+      });
+      return result!;
+    } finally {
+      await session.endSession();
+    }
   }
 }

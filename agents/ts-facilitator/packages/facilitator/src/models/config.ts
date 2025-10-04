@@ -10,6 +10,8 @@ export const ConfigSchema = z.object({
     uri: z.string().default('mongodb://localhost:27017'),
     dbName: z.string().default('nanda_points'),
     maxConnections: z.number().default(10),
+    // ACID transaction support (requires MongoDB replica set in production)
+    useTransactions: z.boolean().default(false),
   }),
 
   // Server Configuration
@@ -50,6 +52,7 @@ export function loadConfig(): Config {
       uri: process.env.MONGODB_URI,
       dbName: process.env.NP_DB_NAME,
       maxConnections: process.env.MONGODB_MAX_CONNECTIONS ? parseInt(process.env.MONGODB_MAX_CONNECTIONS) : undefined,
+      useTransactions: process.env.MONGODB_USE_TRANSACTIONS === 'true' || process.env.NODE_ENV === 'production',
     },
     server: {
       port: process.env.PORT ? parseInt(process.env.PORT) : undefined,
@@ -76,3 +79,10 @@ export function loadConfig(): Config {
 
   return ConfigSchema.parse(cleanConfig);
 }
+
+/**
+ * Helper functions for configuration
+ */
+export const isDev = (config: Config) => config.nodeEnv === 'development';
+export const isProd = (config: Config) => config.nodeEnv === 'production';
+export const useTransactions = (config: Config) => config.mongodb.useTransactions;

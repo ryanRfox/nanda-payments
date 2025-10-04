@@ -292,7 +292,7 @@ async function seed() {
   const shouldReset = process.argv.includes('--reset');
 
   const config = loadConfig();
-  const db = new DatabaseService(config.mongodb);
+  const db = new DatabaseService(config);
 
   try {
     // Connect to database

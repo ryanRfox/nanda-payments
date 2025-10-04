@@ -35,7 +35,7 @@ export async function setupTestEnvironment() {
   config.mongodb.dbName = 'nanda_test';
 
   // Initialize services
-  const db = new DatabaseService(config.mongodb);
+  const db = new DatabaseService(config);
   await db.connect();
 
   const walletService = new WalletService(db);
@@ -57,8 +57,10 @@ export async function setupTestEnvironment() {
 
 export async function cleanupTestEnvironment() {
   if (testServices?.db) {
-    // Stop cleanup interval
-    testServices.paymentSessionService.stopPeriodicCleanup();
+    // Stop cleanup interval (if method exists)
+    if (typeof testServices.paymentSessionService.stopPeriodicCleanup === 'function') {
+      testServices.paymentSessionService.stopPeriodicCleanup();
+    }
     await testServices.db.disconnect();
   }
   if (mongod) {
